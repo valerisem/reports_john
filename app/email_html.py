@@ -14,6 +14,7 @@ HEADER_IMAGE_URL = (
     "https://tciqyupqtpbhremuprxe.supabase.co/storage/v1/object/public/"
     "reports%20for%20john/email-header_1.jpg"
 )
+FOOTER_IMAGE_URL = ""
 LOGO_URL = (
     "https://tciqyupqtpbhremuprxe.supabase.co/storage/v1/object/public/"
     "reports%20for%20john/email-logo.png"
@@ -67,6 +68,7 @@ def render_email(
     sender_name: str,
     test_banner: dict | None = None,
     header_image_url: str = HEADER_IMAGE_URL,
+    footer_image_url: str = FOOTER_IMAGE_URL,
     logo_url: str = LOGO_URL,
 ) -> str:
     stage_rows = [row for row in data.by_stage() if row["deals"]]
@@ -86,6 +88,7 @@ def render_email(
             f"{compact_gbp(data.weighted_gbp)} weighted pipeline"
         ),
         "header_image_url": header_image_url,
+        "footer_image_url": footer_image_url,
         "logo_url": logo_url,
         "test_banner": test_banner,
         "stats": [

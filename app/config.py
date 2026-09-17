@@ -52,6 +52,9 @@ class Settings(BaseSettings):
         "https://tciqyupqtpbhremuprxe.supabase.co/storage/v1/object/public/"
         "reports%20for%20john/email-header_1.jpg"
     )
+    # Mirrors the header: the background fades down into the photo so the
+    # email ends on the picture. Empty leaves the plain logo footer.
+    footer_image_url: str = ""
     logo_url: str = (
         "https://tciqyupqtpbhremuprxe.supabase.co/storage/v1/object/public/"
         "reports%20for%20john/email-logo.png"

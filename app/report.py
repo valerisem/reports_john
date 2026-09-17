@@ -81,6 +81,7 @@ def build(settings: Settings, data: ReportData) -> Artefacts:
         sender_name=settings.report_sender_name,
         test_banner=banner,
         header_image_url=settings.header_image_url,
+        footer_image_url=settings.footer_image_url,
         logo_url=settings.logo_url,
     )
     text = email_html.plain_text_fallback(
