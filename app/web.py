@@ -101,6 +101,21 @@ def preview_data() -> JSONResponse:
     )
 
 
+@app.get("/preview/fields", dependencies=[Depends(require_admin)])
+def preview_fields() -> JSONResponse:
+    """Which Pipedrive fields exist and which ones the report matched.
+
+    Use this when a column comes out blank: it shows every field name the
+    account has, so a renamed field is obvious.
+    """
+    from .pipedrive import PipedriveClient
+
+    settings = get_settings()
+    with PipedriveClient(settings.pipedrive_api_token, settings.pipedrive_base_url) as client:
+        catalogue = client.field_catalogue()
+        return JSONResponse({"matched": client.field_keys(), "available": catalogue})
+
+
 @app.post("/run", dependencies=[Depends(require_admin)])
 def run_now(dry_run: bool = Query(default=False, description="Build everything but do not send")) -> dict:
     """Build and send the report immediately, honouring TEST_MODE."""

@@ -163,6 +163,20 @@ class PipedriveClient:
         log.warning("No Pipedrive field found on %s for labels %s", path, labels)
         return None
 
+    def field_catalogue(self) -> dict[str, list[dict]]:
+        """Every deal/org field name and key, for diagnosing a failed match."""
+        out: dict[str, list[dict]] = {}
+        for label, path in (("deal", "/v1/dealFields"), ("organization", "/v1/organizationFields")):
+            try:
+                payload = self._get(path, {"limit": 500})
+                out[label] = [
+                    {"name": f.get("name"), "key": f.get("key"), "type": f.get("field_type")}
+                    for f in payload.get("data") or []
+                ]
+            except PipedriveError as exc:
+                out[label] = [{"error": str(exc)[:300]}]
+        return out
+
     def field_keys(self) -> dict[str, str | None]:
         return {
             "deal_account_manager": self._field_key("/v1/dealFields", DEAL_ACCOUNT_MANAGER_LABELS),
