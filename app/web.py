@@ -49,9 +49,8 @@ def health() -> dict:
         "fortnightly": settings.schedule_fortnightly,
         "next_runs": scheduler.next_runs(settings),
         "pipedrive_configured": bool(settings.pipedrive_api_token),
-        "gmail_configured": bool(
-            settings.gmail_client_id and settings.gmail_client_secret and settings.gmail_refresh_token
-        ),
+        "mail_transport": settings.mail_transport,
+        "mail_configured": settings.mail_configured(),
         "recipients": {"to": settings.mail_to, "cc": settings.mail_cc},
     }
 

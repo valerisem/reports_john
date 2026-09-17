@@ -118,10 +118,13 @@ def send(settings: Settings, artefacts: Artefacts) -> str:
         attachment=(artefacts.filename, artefacts.workbook),
     )
     return mailer.send(
+        transport=settings.mail_transport,
+        message=message,
+        username=settings.mail_from,
+        app_password=settings.gmail_app_password,
         client_id=settings.gmail_client_id,
         client_secret=settings.gmail_client_secret,
         refresh_token=settings.gmail_refresh_token,
-        message=message,
     )
 
 

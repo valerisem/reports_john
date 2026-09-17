@@ -55,7 +55,12 @@ class Settings(BaseSettings):
     test_mode: bool = True
     test_recipient: str = ""
 
-    # --- Gmail OAuth -------------------------------------------------------
+    # --- Gmail -------------------------------------------------------------
+    # "app_password" (simplest, nothing to register) or "oauth".
+    mail_transport: str = "app_password"
+    # App Password from https://myaccount.google.com/apppasswords
+    gmail_app_password: str = ""
+    # Only needed when MAIL_TRANSPORT=oauth.
     gmail_client_id: str = ""
     gmail_client_secret: str = ""
     gmail_refresh_token: str = ""
@@ -82,6 +87,13 @@ class Settings(BaseSettings):
     @property
     def pipedrive_base_url(self) -> str:
         return f"https://{self.pipedrive_domain}.pipedrive.com"
+
+    def mail_configured(self) -> bool:
+        if not self.mail_from:
+            return False
+        if self.mail_transport == "oauth":
+            return bool(self.gmail_client_id and self.gmail_client_secret and self.gmail_refresh_token)
+        return bool(self.gmail_app_password)
 
     def resolved_recipients(self) -> tuple[list[str], list[str]]:
         """Return (to, cc) after applying TEST_MODE redirection."""

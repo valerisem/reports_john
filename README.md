@@ -60,7 +60,28 @@ scheduled report never fails to send because a rates API is down.
 Pipedrive → *Settings → Personal preferences → API* → copy the token into
 `PIPEDRIVE_API_TOKEN`.
 
-### 2. Gmail (sends from your own account, lands in your Sent folder)
+### 2. Gmail
+
+Either route sends **as you**, so the report lands in your Sent folder and
+replies come back to you.
+
+#### App Password — recommended, about two minutes
+
+1. Turn on 2-Step Verification on the sending account, if it isn't already
+2. Go to <https://myaccount.google.com/apppasswords>
+3. Name it anything (e.g. "Pipeline report"), and copy the 16 characters
+4. Set `MAIL_FROM` to that Gmail address and `GMAIL_APP_PASSWORD` to the code
+
+That's it — nothing to register with Google Cloud. The app sends over
+`smtp.gmail.com`, and Gmail copies SMTP-sent mail into Sent automatically.
+Spaces in the displayed password are stripped for you.
+
+Revoke it any time from the same page; it grants sending only, not inbox access.
+
+#### OAuth — only if App Passwords are disabled
+
+Some Workspace admins turn App Passwords off. In that case set
+`MAIL_TRANSPORT=oauth` and:
 
 1. [Google Cloud Console](https://console.cloud.google.com/) → create or pick a project
 2. *APIs & Services → Library* → enable **Gmail API**
@@ -73,11 +94,9 @@ pip install google-auth-oauthlib
 GMAIL_CLIENT_ID=... GMAIL_CLIENT_SECRET=... python scripts/gmail_oauth.py
 ```
 
-It opens a browser, you approve the "send email" permission, and it prints the
-three `GMAIL_*` values to paste into Railway.
-
-Only the `gmail.send` scope is requested — the app can send mail as you and
-nothing else. It cannot read your inbox.
+It opens a browser, you approve the "send email" permission, and prints the
+three `GMAIL_*` values. Only the `gmail.send` scope is requested — it can send
+mail as you and nothing else, and cannot read your inbox.
 
 ### 3. Deploy to Railway
 
@@ -164,7 +183,7 @@ Railway's own cron can be used instead — point a scheduled job at
 python -m pytest tests/ -q
 ```
 
-47 tests. They run against the 129 real deals in
+54 tests. They run against the 129 real deals in
 `assets/template_reference.xlsx`, so no API credentials are needed, and they
 assert the output reproduces the reference report exactly — headline totals,
 per-stage and per-owner breakdowns, workbook structure and formulas, and the
