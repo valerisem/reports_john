@@ -427,6 +427,36 @@ def _table(ws: Worksheet, *, title: str, title_cell: str, columns: list[tuple[st
     return total_row
 
 
+def _pod_table(ws: Worksheet, *, title_cell: str, header_row: int,
+               rows: list[dict]) -> int:
+    """Account owners with their pod's account managers indented underneath."""
+    ws[title_cell] = "Pods - account owners and their account managers"
+    ws[title_cell].font = _font(size=13, bold=True, color=INDIGO)
+    ws.row_dimensions[int(title_cell[1:])].height = TITLE_ROW_HEIGHT
+    columns = [("B", "Account Owner / Manager"), ("C", "Deals"), ("D", "Value (£)"), ("E", "Weighted (£)")]
+    _header_row(ws, header_row, columns)
+
+    first = header_row + 1
+    for offset, row in enumerate(rows):
+        excel_row = first + offset
+        ws.row_dimensions[excel_row].height = DATA_ROW_HEIGHT
+        is_owner = row["manager"] is None
+        label = row["owner"] if is_owner else f"    {row['manager']}"
+        values = [label, row["deals"], row["value_gbp"], row["weighted_gbp"]]
+        for (column, _), value in zip(columns, values):
+            cell = ws[f"{column}{excel_row}"]
+            cell.value = value
+            _style_body(
+                cell,
+                number_format={"C": "General", "D": GBP, "E": GBP}.get(column, "General"),
+                align="center" if column == "C" else "general",
+                tint=ROW_TINT if is_owner else None,
+                bold=is_owner,
+                color=INDIGO if is_owner else BLACK,
+            )
+    return first + len(rows) - 1
+
+
 def _build_summary(ws: Worksheet, data: ReportData, deal_last: int) -> None:
     ws.sheet_view.showGridLines = False
     widths = {"A": 2, "B": 24, "C": 11, "D": 13, "E": 15, "G": 3, "H": 24, "I": 9, "J": 15}
@@ -491,16 +521,8 @@ def _build_summary(ws: Worksheet, data: ReportData, deal_last: int) -> None:
 
     # Block 2 - account managers (left) and industries (right).
     header2 = max(stage_total, owner_total) + 3
-    manager_rows = [
-        [name, count("D", f"B{header2 + 1 + i}"), total("D", f"B{header2 + 1 + i}", "I"),
-         total("D", f"B{header2 + 1 + i}", "K")]
-        for i, name in enumerate(data.account_managers)
-    ]
-    manager_total = _table(
-        ws, title="Pipeline by Account Manager", title_cell=f"B{header2 - 1}",
-        columns=[("B", "Account Manager"), ("C", "Deals"), ("D", "Value (£)"), ("E", "Weighted (£)")],
-        rows=manager_rows, header_row=header2, tint=None, total_label="Total",
-        formats={"C": "General", "D": GBP, "E": GBP},
+    manager_total = _pod_table(
+        ws, title_cell=f"B{header2 - 1}", header_row=header2, rows=data.by_pod()
     )
     industry_rows = [
         [name, count("P", f"H{header2 + 1 + i}"), total("P", f"H{header2 + 1 + i}", "I"),

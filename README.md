@@ -35,14 +35,39 @@ owner.
 | Field | Source |
 |---|---|
 | Brand | Pipedrive organisation name |
-| Account Owner | Deal owner |
-| Account Manager | Deal custom field named "Account Manager" (resolved by name, not by key) |
+| Account Owner | **Pod lead** of the Pipedrive deal owner (Supabase `team.pod_id`) |
+| Account Manager | Supabase `account_manager_orgs`, keyed by Pipedrive organisation |
 | Client status | `Existing client` if the organisation's `won_deals_count` is above zero, else `New business` |
 | Stage / Probability | Pipeline stage and its default probability |
 | Value (£) | Deal value × the FX rate on the Settings sheet |
 | Weighted (£) | Value (£) × stage probability |
 | Industry / Sub-industry | Organisation custom fields — "Wide niche" / "Narrow niche" in this account |
 | Days in stage | Report date − last stage change |
+
+### Pods
+
+Pipedrive knows who owns a deal; it does not know the org chart. That lives in
+Supabase:
+
+* `team` — people, with `pd_id` linking to a Pipedrive user, `pod_id` pointing at
+  their pod lead, and `left_date` for leavers
+* `roles` — job titles
+* `account_manager_orgs` — which account manager looks after which organisation
+
+A deal owned by Maggie Parrott reports under **Valeriia Mukhai**, because Maggie
+is in Valeriia's pod. That is why the report shows three account owners where
+Pipedrive shows seven, and why the Summary's pod table lists each owner with the
+account managers underneath them.
+
+Account Manager is a separate lookup by organisation and is *not* tied to the
+pod: an org owned by Carrick's pod can be managed by an AM from Ritchie's.
+
+Leavers are excluded as of the report date — someone with a leaving date next
+month still counts today. Full names come from Supabase, so "ritchie" in
+Pipedrive reads as "Ritchie Boubouli" in the report.
+
+If Supabase is unreachable the report still goes out: owners fall back to raw
+Pipedrive names and Account Manager to "-".
 
 Custom fields are looked up **by their display name** at run time, so the app
 keeps working if the CRM is rebuilt and the field keys change. Matching is
@@ -69,6 +94,11 @@ scheduled report never fails to send because a rates API is down.
 
 Pipedrive → *Settings → Personal preferences → API* → copy the token into
 `PIPEDRIVE_API_TOKEN`.
+
+### 1b. Supabase key
+
+Supabase → *Project Settings → API Keys* → copy the **publishable / anon** key
+into `SUPABASE_KEY`. A service-role key is not needed.
 
 ### 2. Gmail
 
@@ -143,6 +173,7 @@ Endpoints (all but `/health` require the `X-Admin-Token` header when
 | `GET /preview/email` | The newsletter in your browser, exactly as it will be sent |
 | `GET /preview/excel` | Downloads the workbook |
 | `GET /preview/data` | The underlying numbers as JSON, for spot-checking against Pipedrive |
+| `GET /preview/data` also returns `pods` and `by_pod` |  |
 | `GET /preview/fields` | Every Pipedrive field name, and which ones the report matched |
 | `POST /run` | Builds and sends now (honours `TEST_MODE`) |
 | `POST /run?dry_run=true` | Builds everything and reports what it *would* send, without sending |
@@ -194,7 +225,7 @@ Railway's own cron can be used instead — point a scheduled job at
 python -m pytest tests/ -q
 ```
 
-62 tests. They run against the 129 real deals in
+76 tests. They run against the 129 real deals in
 `assets/template_reference.xlsx`, so no API credentials are needed, and they
 assert the output reproduces the reference report exactly — headline totals,
 per-stage and per-owner breakdowns, workbook structure and formulas, and the

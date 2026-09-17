@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any, Iterable
 
+from .team_directory import TeamDirectory
+
 # Pipedrive stage name -> the friendlier label used in the newsletter.
 STAGE_EMAIL_LABELS = {
     "Understand Need/Problem": "Discovery",
@@ -78,6 +80,7 @@ class ReportData:
     account_owners: list[str]
     account_managers: list[str]
     industries: list[str]
+    directory: TeamDirectory = field(default_factory=TeamDirectory)
 
     # -- headline numbers --------------------------------------------------
     @property
@@ -139,6 +142,65 @@ class ReportData:
 
     def by_industry(self) -> list[dict[str, Any]]:
         return self._group("industry", self.industries)
+
+    def by_pod(self) -> list[dict[str, Any]]:
+        """Each account owner's pod, and the account managers inside it.
+
+        Rows are the owner followed by their account managers, so the Summary
+        reads as the org chart rather than two unrelated lists. Managers with
+        pipeline but no pod still appear, under 'Unassigned'.
+        """
+        placed: set[str] = set()
+        rows: list[dict[str, Any]] = []
+
+        for owner in self.account_owners:
+            owner_deals = [d for d in self.deals if d.account_owner == owner]
+            pod_managers = next(
+                (p.account_managers for p in self.directory.pods if p.lead == owner), []
+            )
+            # Anyone actually carrying pipeline under this owner, pod or not.
+            active = [
+                m for m in self.account_managers
+                if any(d.account_manager == m for d in owner_deals)
+            ]
+            managers = [m for m in pod_managers if m in active]
+            managers += [m for m in active if m not in managers]
+
+            rows.append(
+                {
+                    "owner": owner,
+                    "manager": None,
+                    "deals": len(owner_deals),
+                    "value_gbp": sum(d.value_gbp for d in owner_deals),
+                    "weighted_gbp": sum(d.weighted_gbp for d in owner_deals),
+                }
+            )
+            for manager in managers:
+                placed.add(manager)
+                deals = [d for d in owner_deals if d.account_manager == manager]
+                rows.append(
+                    {
+                        "owner": owner,
+                        "manager": manager,
+                        "deals": len(deals),
+                        "value_gbp": sum(d.value_gbp for d in deals),
+                        "weighted_gbp": sum(d.weighted_gbp for d in deals),
+                    }
+                )
+
+        unplaced = [m for m in self.account_managers if m not in placed]
+        for manager in unplaced:
+            deals = [d for d in self.deals if d.account_manager == manager]
+            rows.append(
+                {
+                    "owner": UNASSIGNED,
+                    "manager": manager,
+                    "deals": len(deals),
+                    "value_gbp": sum(d.value_gbp for d in deals),
+                    "weighted_gbp": sum(d.weighted_gbp for d in deals),
+                }
+            )
+        return rows
 
     # -- newsletter lists --------------------------------------------------
     def top_brands(self, status: str, limit: int = 10) -> list[BrandRow]:
@@ -205,7 +267,9 @@ def build_report(
     users: dict[int, str],
     won_org_ids: set[int],
     field_keys: dict[str, str | None],
+    directory: TeamDirectory | None = None,
 ) -> ReportData:
+    directory = directory or TeamDirectory()
     stages = sorted(
         (
             Stage(
@@ -242,11 +306,19 @@ def build_report(
         value_gbp = value * rate
         weighted_gbp = value_gbp * stage.probability
 
+        # Account Manager comes from the Supabase directory, keyed by
+        # organisation. A Pipedrive custom field is honoured if one exists.
         am_raw = _custom(deal, am_key)
         if isinstance(am_raw, (int, float)) and int(am_raw) in users:
             account_manager = users[int(am_raw)]
         else:
             account_manager = _text(am_raw)
+        account_manager = directory.account_manager(deal.get("org_id"), account_manager)
+
+        owner_id = deal.get("owner_id")
+        account_owner = directory.account_owner(
+            owner_id, _text(users.get(owner_id), default=UNASSIGNED)
+        )
 
         person = persons.get(deal.get("person_id")) or {}
 
@@ -254,7 +326,7 @@ def build_report(
             DealRow(
                 brand=brand,
                 title=_text(deal.get("title"), default=""),
-                account_owner=_text(users.get(deal.get("owner_id")), default=UNASSIGNED),
+                account_owner=account_owner,
                 account_manager=account_manager,
                 client_status=EXISTING if deal.get("org_id") in won_org_ids else NEW_BUSINESS,
                 stage=stage.name,
@@ -333,4 +405,5 @@ def build_report(
         account_owners=_ordered_by_value(owner_totals),
         account_managers=_ordered_by_value(manager_totals),
         industries=_ordered_by_value(industry_totals),
+        directory=directory,
     )

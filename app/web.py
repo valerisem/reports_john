@@ -49,6 +49,7 @@ def health() -> dict:
         "fortnightly": settings.schedule_fortnightly,
         "next_runs": scheduler.next_runs(settings),
         "pipedrive_configured": bool(settings.pipedrive_api_token),
+        "supabase_configured": bool(settings.supabase_url and settings.supabase_key),
         "mail_transport": settings.mail_transport,
         "mail_configured": settings.mail_configured(),
         "recipients": {"to": settings.mail_to, "cc": settings.mail_cc},
@@ -96,6 +97,12 @@ def preview_data() -> JSONResponse:
             "by_stage": data.by_stage(),
             "by_owner": data.by_owner(),
             "by_manager": data.by_manager(),
+            "by_pod": data.by_pod(),
+            "team_directory_loaded": data.directory.loaded,
+            "pods": [
+                {"lead": p.lead, "account_managers": p.account_managers}
+                for p in data.directory.pods
+            ],
             "by_industry": data.by_industry(),
         }
     )

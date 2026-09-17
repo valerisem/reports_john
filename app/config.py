@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     pipedrive_field_industry: str = ""
     pipedrive_field_sub_industry: str = ""
 
+    # --- Supabase (team directory: pods, owners, account managers) ---------
+    supabase_url: str = "https://tciqyupqtpbhremuprxe.supabase.co"
+    # The anon/publishable key is enough: team, roles and teams allow public
+    # reads, and account_manager_orgs has no RLS.
+    supabase_key: str = ""
+
     # --- Report ------------------------------------------------------------
     report_title: str = "Sales Pipeline Update"
     report_greeting_name: str = "John"

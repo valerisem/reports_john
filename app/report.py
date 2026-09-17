@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from . import email_html, excel, fx, mailer
+from . import email_html, excel, fx, mailer, team_directory
 from .config import Settings
 from .model import ReportData, build_report
 from .pipedrive import PipedriveClient
@@ -42,6 +42,10 @@ def collect(settings: Settings, report_date: date | None = None) -> ReportData:
         settings.fx_api_url, settings.fx_fallback_usd_gbp, settings.fx_fallback_eur_gbp
     )
 
+    directory = team_directory.load_directory(
+        settings.supabase_url, settings.supabase_key, report_date
+    )
+
     with PipedriveClient(settings.pipedrive_api_token, settings.pipedrive_base_url) as client:
         pipeline_id = settings.pipedrive_pipeline_id
         deals = client.open_deals(pipeline_id)
@@ -60,6 +64,7 @@ def collect(settings: Settings, report_date: date | None = None) -> ReportData:
             users=client.users(),
             won_org_ids=client.won_deal_org_ids(org_ids),
             field_keys=client.field_keys(settings.field_overrides()),
+            directory=directory,
         )
 
 
@@ -140,6 +145,7 @@ def run(settings: Settings, *, dry_run: bool = False) -> dict:
         "weighted_gbp": round(data.weighted_gbp),
         "rates": data.rates,
         "rates_are_live": data.rates_are_live,
+        "team_directory_loaded": data.directory.loaded,
         "test_mode": artefacts.test_mode,
         "to": artefacts.to,
         "cc": artefacts.cc,
