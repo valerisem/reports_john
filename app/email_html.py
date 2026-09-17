@@ -66,6 +66,8 @@ def render_email(
     greeting_name: str,
     sender_name: str,
     test_banner: dict | None = None,
+    header_image_url: str = HEADER_IMAGE_URL,
+    logo_url: str = LOGO_URL,
 ) -> str:
     stage_rows = [row for row in data.by_stage() if row["deals"]]
     owner_rows = [row for row in data.by_owner() if row["deals"]]
@@ -83,8 +85,8 @@ def render_email(
             f"{data.open_deal_count} open deals · "
             f"{compact_gbp(data.weighted_gbp)} weighted pipeline"
         ),
-        "header_image_url": HEADER_IMAGE_URL,
-        "logo_url": LOGO_URL,
+        "header_image_url": header_image_url,
+        "logo_url": logo_url,
         "test_banner": test_banner,
         "stats": [
             {"value": f"{data.open_deal_count:,}", "label": "Open deals", "colour": INK},

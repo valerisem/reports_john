@@ -47,6 +47,16 @@ class Settings(BaseSettings):
     report_sender_name: str = "Valeria"
     report_timezone: str = "Europe/London"
 
+    # Header artwork and logo, so they can be swapped without a code change.
+    header_image_url: str = (
+        "https://tciqyupqtpbhremuprxe.supabase.co/storage/v1/object/public/"
+        "reports%20for%20john/email-header_1.jpg"
+    )
+    logo_url: str = (
+        "https://tciqyupqtpbhremuprxe.supabase.co/storage/v1/object/public/"
+        "reports%20for%20john/email-logo.png"
+    )
+
     # Currency fallbacks, used when the live FX lookup fails.
     fx_fallback_usd_gbp: float = 0.74
     fx_fallback_eur_gbp: float = 0.85
