@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+*.xlsx
+!assets/*.xlsx
+out/
+.pytest_cache/
+.DS_Store
+*.egg-info/
