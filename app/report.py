@@ -58,8 +58,8 @@ def collect(settings: Settings, report_date: date | None = None) -> ReportData:
             persons=client.persons(person_ids),
             org_contacts=client.persons_by_org(org_ids),
             users=client.users(),
-            won_org_ids=client.won_deal_org_ids(pipeline_id),
-            field_keys=client.field_keys(),
+            won_org_ids=client.won_deal_org_ids(org_ids),
+            field_keys=client.field_keys(settings.field_overrides()),
         )
 
 

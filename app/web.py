@@ -113,7 +113,8 @@ def preview_fields() -> JSONResponse:
     settings = get_settings()
     with PipedriveClient(settings.pipedrive_api_token, settings.pipedrive_base_url) as client:
         catalogue = client.field_catalogue()
-        return JSONResponse({"matched": client.field_keys(), "available": catalogue})
+        matched = client.field_keys(settings.field_overrides())
+        return JSONResponse({"matched": matched, "available": catalogue})
 
 
 @app.post("/run", dependencies=[Depends(require_admin)])

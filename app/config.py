@@ -29,6 +29,11 @@ class Settings(BaseSettings):
         "'api' works for most accounts.",
     )
     pipedrive_pipeline_id: int | None = 1
+    # Override custom-field resolution when a field is named unusually.
+    # Accepts a field key (40 hex chars) from GET /preview/fields.
+    pipedrive_field_account_manager: str = ""
+    pipedrive_field_industry: str = ""
+    pipedrive_field_sub_industry: str = ""
 
     # --- Report ------------------------------------------------------------
     report_title: str = "Sales Pipeline Update"
@@ -83,6 +88,13 @@ class Settings(BaseSettings):
     @classmethod
     def _parse_emails(cls, value):
         return _split_emails(value)
+
+    def field_overrides(self) -> dict[str, str]:
+        return {
+            "deal_account_manager": self.pipedrive_field_account_manager,
+            "org_industry": self.pipedrive_field_industry,
+            "org_sub_industry": self.pipedrive_field_sub_industry,
+        }
 
     @property
     def pipedrive_base_url(self) -> str:

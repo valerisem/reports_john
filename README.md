@@ -37,15 +37,25 @@ owner.
 | Brand | Pipedrive organisation name |
 | Account Owner | Deal owner |
 | Account Manager | Deal custom field named "Account Manager" (resolved by name, not by key) |
-| Client status | `Existing client` if the organisation has at least one **won** deal, else `New business` |
+| Client status | `Existing client` if the organisation's `won_deals_count` is above zero, else `New business` |
 | Stage / Probability | Pipeline stage and its default probability |
 | Value (£) | Deal value × the FX rate on the Settings sheet |
 | Weighted (£) | Value (£) × stage probability |
-| Industry / Sub-industry | Organisation custom fields named "Industry" / "Sub-industry" |
+| Industry / Sub-industry | Organisation custom fields — "Wide niche" / "Narrow niche" in this account |
 | Days in stage | Report date − last stage change |
 
 Custom fields are looked up **by their display name** at run time, so the app
-keeps working if the CRM is rebuilt and the field hash keys change.
+keeps working if the CRM is rebuilt and the field keys change. Matching is
+deliberately strict — an exact name match, then a whole-word match on a long
+label — because silently matching the wrong field is worse than leaving a
+column blank. `GET /preview/fields` lists every field the account has next to
+the ones the report matched; if something is named unusually, paste its key
+into `PIPEDRIVE_FIELD_*` to pin it.
+
+Client status reads each organisation's own `won_deals_count` rather than
+sweeping won deals, because `/api/v2/deals` hides archived deals and Pipedrive
+archives old won ones — long-standing clients were otherwise counted as new
+business.
 
 FX rates are fetched live each run and written into the Settings sheet; if the
 lookup fails it falls back to `FX_FALLBACK_USD_GBP` / `FX_FALLBACK_EUR_GBP` so a
@@ -133,6 +143,7 @@ Endpoints (all but `/health` require the `X-Admin-Token` header when
 | `GET /preview/email` | The newsletter in your browser, exactly as it will be sent |
 | `GET /preview/excel` | Downloads the workbook |
 | `GET /preview/data` | The underlying numbers as JSON, for spot-checking against Pipedrive |
+| `GET /preview/fields` | Every Pipedrive field name, and which ones the report matched |
 | `POST /run` | Builds and sends now (honours `TEST_MODE`) |
 | `POST /run?dry_run=true` | Builds everything and reports what it *would* send, without sending |
 
@@ -183,7 +194,7 @@ Railway's own cron can be used instead — point a scheduled job at
 python -m pytest tests/ -q
 ```
 
-54 tests. They run against the 129 real deals in
+62 tests. They run against the 129 real deals in
 `assets/template_reference.xlsx`, so no API credentials are needed, and they
 assert the output reproduces the reference report exactly — headline totals,
 per-stage and per-owner breakdowns, workbook structure and formulas, and the
