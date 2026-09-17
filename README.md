@@ -89,6 +89,12 @@ railway up
 `railway.json` builds from the `Dockerfile` and health-checks `/health`. Set the
 variables from `.env.example` in the Railway dashboard.
 
+The port is handled by the Dockerfile's `CMD`, which expands `$PORT` through a
+shell. Do **not** set a custom start command of `uvicorn ... --port $PORT` in
+`railway.json` or the Railway dashboard — Railway runs the start command without
+a shell, so `$PORT` arrives as a literal string and the container crashloops
+with `Invalid value for '--port': '$PORT' is not a valid integer`.
+
 ---
 
 ## Testing before it goes to anyone
