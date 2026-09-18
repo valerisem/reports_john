@@ -55,7 +55,7 @@ body{margin:0;padding:0;-webkit-text-size-adjust:100%;}
 <td class="st{{ loop.index0 }}" width="33%" align="center" valign="top" style="{% if not loop.first %}border-left:1px solid #e7e5ec;{% endif %}padding:2px 4px;text-align:center;"><div class="sv" style="{{ cell_label() }}font-size:32px;line-height:36px;font-weight:700;color:{{ stat.colour }};letter-spacing:-0.8px;">{{ stat.value }}</div><div style="{{ cell_label() }}font-size:14px;line-height:20px;color:#6b6a75;padding-top:2px;">{{ stat.label }}</div></td>
 {%- endfor %}
 </tr></table>
-<div style="{{ cell_label() }}font-size:12px;line-height:17px;color:#9a99a5;font-style:italic;padding-top:12px;text-align:center;">Open pipeline only — excludes won and closed business.</div>
+<div style="{{ cell_label() }}font-size:12px;line-height:17px;color:#9a99a5;font-style:italic;padding-top:12px;text-align:center;">Open pipeline only. Excludes won and lost business.</div>
 </td></tr></table></td></tr>
 
 <tr><td class="pad" style="padding:52px 40px 0;"><div class="sh" style="{{ cell_label() }}font-size:24px;line-height:30px;font-weight:700;color:#15141f;letter-spacing:-0.3px;text-align:center;">Top brands by weighted value</div>
