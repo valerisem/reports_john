@@ -124,6 +124,46 @@ def preview_fields() -> JSONResponse:
         return JSONResponse({"matched": matched, "available": catalogue})
 
 
+@app.get("/preview/brands", dependencies=[Depends(require_admin)])
+def preview_brands() -> JSONResponse:
+    """Which Pipedrive organisations cluster into the same brand.
+
+    Duplicated records are why a returning client can be reported as new
+    business: the won history sits on one record and the open deal on another.
+    """
+    from .brands import resolve_brands
+    from .pipedrive import PipedriveClient
+
+    settings = get_settings()
+    with PipedriveClient(settings.pipedrive_api_token, settings.pipedrive_base_url) as client:
+        orgs = {org["id"]: org for org in client.all_organizations()}
+    by_org = resolve_brands(orgs)
+
+    brands = {id(b): b for b in by_org.values()}.values()
+    duplicated = sorted(
+        (b for b in brands if b.is_duplicated), key=lambda b: (-len(b.org_ids), b.name.lower())
+    )
+    return JSONResponse(
+        {
+            "organisations": len(orgs),
+            "brands": len(brands),
+            "duplicated_brands": len(duplicated),
+            "clusters": [
+                {
+                    "brand": b.name,
+                    "key": b.key,
+                    "org_ids": b.org_ids,
+                    "names": b.names,
+                    "domains": sorted(b.domains),
+                    "won_deals_pooled": b.won_deals,
+                    "status": "Existing client" if b.is_existing_client else "New business",
+                }
+                for b in duplicated
+            ],
+        }
+    )
+
+
 @app.post("/run", dependencies=[Depends(require_admin)])
 def run_now(dry_run: bool = Query(default=False, description="Build everything but do not send")) -> dict:
     """Build and send the report immediately, honouring TEST_MODE."""

@@ -146,6 +146,12 @@ class PipedriveClient:
                 result[person["id"]] = person
         return result
 
+    def all_organizations(self) -> list[dict]:
+        """Every organisation with its won-deal count, for brand clustering."""
+        return list(self._paginate_v2(
+            "/api/v2/organizations", {"include_fields": "won_deals_count"}
+        ))
+
     def persons_by_org(self, org_ids: set[int]) -> dict[int, list[dict]]:
         """All contacts grouped by organization (for the Brands sheet)."""
         grouped: dict[int, list[dict]] = {org_id: [] for org_id in org_ids}
