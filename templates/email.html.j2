@@ -79,7 +79,7 @@ body{margin:0;padding:0;-webkit-text-size-adjust:100%;}
 {%- endfor %}
 </tr></table></td></tr>
 {%- if remaining_brands > 0 %}
-<tr><td class="pad" style="padding:16px 40px 0;{{ cell_label() }}font-size:12px;line-height:18px;font-style:italic;color:#9a99a5;">{{ remaining_brands }} other brand{{ 's' if remaining_brands != 1 else '' }}, retained and new {{ 'are' if remaining_brands != 1 else 'is' }} in the pipeline. The full list is in the attached Excel file.</td></tr>
+<tr><td class="pad" style="padding:16px 40px 0;{{ cell_label() }}font-size:12px;line-height:18px;font-style:italic;color:#9a99a5;text-align:center;">{{ remaining_brands }} other brand{{ 's' if remaining_brands != 1 else '' }}, retained and new {{ 'are' if remaining_brands != 1 else 'is' }} in the pipeline. The full list is in the attached Excel file.</td></tr>
 {%- endif %}
 
 {%- if leaderboard.entries %}
