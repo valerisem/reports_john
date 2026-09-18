@@ -225,7 +225,7 @@ def test_stage_owner_split_adds_up_to_each_stage_total(data):
 
 
 def test_leaderboard_runs_second_first_third(data):
-    entries = _leaderboard(data.by_owner(), "https://example.test/art")
+    entries = _leaderboard(data.by_owner(), "https://example.test/art/{name}.png")
     assert [e["rank"] for e in entries] == [2, 1, 3]
     assert entries[1]["name"] == "Valeriia"
     # the tallest column belongs to the winner
@@ -233,8 +233,8 @@ def test_leaderboard_runs_second_first_third(data):
 
 
 def test_leaderboard_names_each_owner_photo_after_their_first_name(data):
-    entries = _leaderboard(data.by_owner(), "https://example.test/art/")
-    assert entries[1]["photo"] == "https://example.test/art/owner-valeriia.png"
+    entries = _leaderboard(data.by_owner(), "https://example.test/art/{name}.png")
+    assert entries[1]["photo"] == "https://example.test/art/valeriia.png"
     assert all(e["photo"] for e in entries)
     assert all(e["photo"] == "" for e in _leaderboard(data.by_owner(), ""))
 
@@ -258,4 +258,4 @@ def test_email_renders_the_leaderboard_ahead_of_the_stage_chart(data):
     html = render_email(data, title="T", greeting_name="John", sender_name="V")
     assert html.index("Weighted Pipeline Leaderboard") < html.index("Pipeline by stage")
     assert "Weighted by account owner" not in html
-    assert "owner-valeriia.png" in html
+    assert "/valeriia.png" in html

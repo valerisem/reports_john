@@ -19,9 +19,9 @@ LOGO_URL = (
     "https://tciqyupqtpbhremuprxe.supabase.co/storage/v1/object/public/"
     "reports%20for%20john/email-logo.png"
 )
-OWNER_PHOTO_BASE_URL = (
+OWNER_PHOTO_URL_TEMPLATE = (
     "https://tciqyupqtpbhremuprxe.supabase.co/storage/v1/object/public/"
-    "reports%20for%20john"
+    "reports%20for%20john/{name}.png"
 )
 
 INK = "#15141f"
@@ -74,7 +74,7 @@ def _bar_rows(rows: list[dict], label_key: str, value_key: str, *,
     ]
 
 
-def _leaderboard(owner_rows: list[dict], photo_base: str) -> list[dict]:
+def _leaderboard(owner_rows: list[dict], photo_template: str) -> list[dict]:
     """Account owners ranked by weighted value, laid out 2nd - 1st - 3rd.
 
     Column height is proportional to weighted value, so the podium moves on
@@ -100,8 +100,8 @@ def _leaderboard(owner_rows: list[dict], photo_base: str) -> list[dict]:
                 "height": round(
                     PODIUM_MIN_PX + (row["weighted_gbp"] / top) * PODIUM_RANGE_PX
                 ),
-                "photo": f"{photo_base.rstrip('/')}/owner-{name.lower()}.png"
-                if photo_base
+                "photo": photo_template.format(name=name.lower())
+                if photo_template
                 else "",
                 "owner": row["name"],
             }
@@ -152,12 +152,12 @@ def render_email(
     header_image_url: str = HEADER_IMAGE_URL,
     footer_image_url: str = FOOTER_IMAGE_URL,
     logo_url: str = LOGO_URL,
-    owner_photo_base_url: str = OWNER_PHOTO_BASE_URL,
+    owner_photo_url_template: str = OWNER_PHOTO_URL_TEMPLATE,
 ) -> str:
     stage_rows = [row for row in data.by_stage() if row["deals"]]
     owner_rows = [row for row in data.by_owner() if row["deals"]]
 
-    leaderboard = _leaderboard(owner_rows, owner_photo_base_url)
+    leaderboard = _leaderboard(owner_rows, owner_photo_url_template)
     split = data.by_stage_owner()
     stage_bars = _bar_rows(stage_rows, "label", "value_gbp", max_fill=94)
     for bar, row in zip(stage_bars, stage_rows):

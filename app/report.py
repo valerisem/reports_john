@@ -83,7 +83,7 @@ def build(settings: Settings, data: ReportData) -> Artefacts:
         header_image_url=settings.header_image_url,
         footer_image_url=settings.footer_image_url,
         logo_url=settings.logo_url,
-        owner_photo_base_url=settings.owner_photo_base_url,
+        owner_photo_url_template=settings.owner_photo_url_template,
     )
     text = email_html.plain_text_fallback(
         data, settings.report_greeting_name, settings.report_sender_name
