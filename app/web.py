@@ -94,6 +94,12 @@ def preview_data() -> JSONResponse:
             "pipeline_gbp": round(data.pipeline_gbp),
             "weighted_gbp": round(data.weighted_gbp),
             "new_business_gbp": round(data.new_business_gbp),
+            # Deals kept in the totals despite no organisation being linked in
+            # Pipedrive: each is a data gap worth fixing at the source.
+            "deals_missing_organisation": [
+                {"title": d.title, "brand": d.brand, "stage": d.stage, "value_gbp": round(d.value_gbp)}
+                for d in data.deals_missing_organisation
+            ],
             "by_stage": data.by_stage(),
             "by_owner": data.by_owner(),
             "by_manager": data.by_manager(),
