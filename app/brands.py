@@ -30,6 +30,14 @@ _NON_ALNUM = re.compile(r"[^a-z0-9]+")
 # one suffix and "Ollie's" matches "Ollies".
 _JOINERS = re.compile(r"[.'’]")
 
+# Values people type when there is no company. They are not brands, and
+# clustering on them would fuse dozens of unrelated records into one.
+_PLACEHOLDERS = {
+    "", "na", "none", "no", "nocompany", "nonamecompany", "non", "donthave",
+    "dont", "unknown", "unknowncompany", "test", "testing", "tbc", "tbd",
+    "notapplicable", "nil", "null",
+}
+
 
 def normalise_name(name: str) -> str:
     """'Cetaphil Ltd.' and 'cetaphil' both become 'cetaphil'."""
@@ -95,12 +103,27 @@ class _Union:
             self._parent[max(ra, rb)] = min(ra, rb)
 
 
+def is_placeholder(name: str) -> bool:
+    return normalise_name(name) in _PLACEHOLDERS
+
+
 def _display_name(names: list[str]) -> str:
-    """Pick the tidiest spelling: prefer mixed case over all-lower/all-upper."""
+    """The spelling most records use, then the shortest, then the tidiest.
+
+    Shortest matters: "Olymptrade" is the brand, "Maree/Olymptrade" is one
+    record's label for it, and the brand name is what reaches John.
+    """
+    # A record labelled "N/A" that joined by domain must not name the brand.
+    real = [n for n in names if not is_placeholder(n)] or names
+    counts: dict[str, int] = {}
+    for name in real:
+        counts[name.strip()] = counts.get(name.strip(), 0) + 1
+
     def score(name: str) -> tuple:
-        has_mixed = name != name.lower() and name != name.upper()
-        return (has_mixed, len(name.strip()))
-    return max(names, key=score).strip()
+        mixed = name != name.lower() and name != name.upper()
+        return (counts[name], -len(name), mixed)
+
+    return max(counts, key=score)
 
 
 def resolve_brands(orgs: dict[int, dict], won_counts: dict[int, int] | None = None) -> dict[int, Brand]:
@@ -112,7 +135,8 @@ def resolve_brands(orgs: dict[int, dict], won_counts: dict[int, int] | None = No
 
     for org_id, org in sorted(orgs.items()):
         union.add(org_id)
-        name_key = normalise_name(org.get("name") or "")
+        raw_name = org.get("name") or ""
+        name_key = "" if is_placeholder(raw_name) else normalise_name(raw_name)
         domain = normalise_domain(org.get("website") or "")
         if name_key:
             union.union(by_name.setdefault(name_key, org_id), org_id)

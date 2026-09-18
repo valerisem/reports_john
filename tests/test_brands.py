@@ -142,3 +142,48 @@ def test_the_key_prefers_a_domain_over_a_name():
     assert by_org[1].key == "drjart.com"
     by_org = resolve_brands({1: {"id": 1, "name": "Dr Jart", "website": None, "won_deals_count": 0}})
     assert by_org[1].key == "name:drjart"
+
+
+# -- findings from the real account ----------------------------------------
+def test_placeholder_company_names_never_cluster():
+    """Pipedrive holds dozens of records named "N/A", "None", "No company".
+    Clustering on those fused unrelated records into one giant "brand"."""
+    orgs = {
+        i: {"id": i, "name": n, "website": None, "won_deals_count": 0}
+        for i, n in enumerate(["N/A", "None", "No company", "na", "Don't have", "non"], start=1)
+    }
+    by_org = resolve_brands(orgs)
+    assert len({id(b) for b in by_org.values()}) == len(orgs)
+
+
+def test_a_placeholder_still_merges_on_a_real_domain():
+    orgs = {
+        1: {"id": 1, "name": "N/A", "website": "zonevoice.com", "won_deals_count": 0},
+        2: {"id": 2, "name": "Zonevoice", "website": "zonevoice.com", "won_deals_count": 1},
+    }
+    by_org = resolve_brands(orgs)
+    assert by_org[1] is by_org[2]
+    assert by_org[1].name == "Zonevoice"
+
+
+def test_the_brand_name_beats_one_records_label():
+    """Two records say "Olymptrade", two say "Maree/Olymptrade"; they share a
+    domain so they are one brand, and John should see the brand."""
+    orgs = {
+        271: {"id": 271, "name": "Maree/Olymptrade", "website": "olymptrade.com", "won_deals_count": 3},
+        423: {"id": 423, "name": "Maree/Olymptrade", "website": None, "won_deals_count": 0},
+        2078: {"id": 2078, "name": "Olymptrade", "website": "olymptrade.com", "won_deals_count": 1},
+        2079: {"id": 2079, "name": "Olymptrade", "website": "olymptrade.com", "won_deals_count": 2},
+    }
+    by_org = resolve_brands(orgs)
+    assert by_org[271].name == "Olymptrade"
+    assert by_org[271].won_deals == 6
+
+
+def test_the_most_used_spelling_wins():
+    orgs = {
+        1: {"id": 1, "name": "HEYTEA", "website": "heytea.com", "won_deals_count": 1},
+        2: {"id": 2, "name": "Hey Tea", "website": "heytea.com", "won_deals_count": 1},
+        3: {"id": 3, "name": "Hey Tea", "website": None, "won_deals_count": 0},
+    }
+    assert resolve_brands(orgs)[1].name == "Hey Tea"
