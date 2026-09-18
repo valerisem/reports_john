@@ -53,17 +53,26 @@ def collect(settings: Settings, report_date: date | None = None) -> ReportData:
         org_ids = {deal["org_id"] for deal in deals if deal.get("org_id")}
         person_ids = {deal["person_id"] for deal in deals if deal.get("person_id")}
 
+        # Every organisation, not just those with open deals: a brand's won
+        # history often sits on a duplicate record that has none, and clustering
+        # cannot pool history it never sees.
+        all_orgs = {org["id"]: org for org in client.all_organizations()}
+        won_org_ids = {
+            org_id for org_id, org in all_orgs.items()
+            if (org.get("won_deals_count") or 0) > 0
+        }
+
         return build_report(
             report_date=report_date,
             rates=rates,
             rates_are_live=live,
             stages_payload=client.stages(pipeline_id),
             deals_payload=deals,
-            orgs=client.organizations(org_ids),
+            orgs=all_orgs,
             persons=client.persons(person_ids),
             org_contacts=client.persons_by_org(org_ids),
             users=client.users(),
-            won_org_ids=client.won_deal_org_ids(org_ids),
+            won_org_ids=won_org_ids,
             field_keys=client.field_keys(settings.field_overrides()),
             directory=directory,
             history=history,

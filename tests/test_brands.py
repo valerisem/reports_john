@@ -187,3 +187,18 @@ def test_the_most_used_spelling_wins():
         3: {"id": 3, "name": "Hey Tea", "website": None, "won_deals_count": 0},
     }
     assert resolve_brands(orgs)[1].name == "Hey Tea"
+
+
+def test_history_on_a_record_with_no_open_deals_still_counts():
+    """The live bug: the report fetched only organisations with open deals, so
+    Dr Jart's two won deals - held on a record with none - were invisible and
+    the brand was reported as new business."""
+    orgs = {
+        82: {"id": 82, "name": "Dr Jart", "website": None, "won_deals_count": 2},      # no open deals
+        2513: {"id": 2513, "name": "Dr Jart", "website": "drjart.com", "won_deals_count": 0},
+    }
+    by_org = resolve_brands(orgs, {82: 2})
+    assert by_org[2513].is_existing_client is True
+    # Clustering only the organisation that has an open deal misses it entirely.
+    partial = resolve_brands({2513: orgs[2513]}, {})
+    assert partial[2513].is_existing_client is False

@@ -210,7 +210,7 @@ def test_email_counts_the_brands_not_shown(html, data):
     shown += len(data.brands_new_this_report[:10])
     if len(data.brands_new_this_report) < 3:
         shown += 5      # the fallback list
-    assert f"{len(data.brands) - shown} more brands are in the pipeline" in html
+    assert f"{len(data.brands) - shown} other brands, retained and new," in html
 
 
 def test_email_uses_friendly_stage_labels(html):

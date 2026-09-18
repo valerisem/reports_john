@@ -19,7 +19,7 @@ body{margin:0;padding:0;-webkit-text-size-adjust:100%;}
  .lab{width:104px!important;}
  .sv{font-size:24px!important;line-height:28px!important;}
  .lab{width:110px!important;font-size:13px!important;}
- .hero{padding:130px 10px 0!important;}
+ .hero{padding:130px 10px {{ 170 if footer_image_url else 0 }}px!important;}
  .sh{font-size:21px!important;line-height:26px!important;}
  .h1{font-size:28px!important;line-height:33px!important;}
 }
@@ -54,7 +54,9 @@ body{margin:0;padding:0;-webkit-text-size-adjust:100%;}
 {%- for stat in stats %}
 <td class="st{{ loop.index0 }}" width="33%" align="center" valign="top" style="{% if not loop.first %}border-left:1px solid #e7e5ec;{% endif %}padding:2px 4px;text-align:center;"><div class="sv" style="{{ cell_label() }}font-size:32px;line-height:36px;font-weight:700;color:{{ stat.colour }};letter-spacing:-0.8px;">{{ stat.value }}</div><div style="{{ cell_label() }}font-size:14px;line-height:20px;color:#6b6a75;padding-top:2px;">{{ stat.label }}</div></td>
 {%- endfor %}
-</tr></table></td></tr></table></td></tr>
+</tr></table>
+<div style="{{ cell_label() }}font-size:12px;line-height:17px;color:#9a99a5;font-style:italic;padding-top:12px;text-align:center;">Open pipeline only — excludes won and closed business.</div>
+</td></tr></table></td></tr>
 
 <tr><td class="pad" style="padding:52px 40px 0;"><div class="sh" style="{{ cell_label() }}font-size:24px;line-height:30px;font-weight:700;color:#15141f;letter-spacing:-0.3px;text-align:center;">Top brands by weighted value</div>
 {{ rule() }}</td></tr>
@@ -77,7 +79,7 @@ body{margin:0;padding:0;-webkit-text-size-adjust:100%;}
 {%- endfor %}
 </tr></table></td></tr>
 {%- if remaining_brands > 0 %}
-<tr><td class="pad" style="padding:16px 40px 0;{{ cell_label() }}font-size:14px;line-height:20px;color:#6b6a75;">{{ remaining_brands }} more brand{{ 's' if remaining_brands != 1 else '' }} {{ 'are' if remaining_brands != 1 else 'is' }} in the pipeline. The full list is in the attached Excel file.</td></tr>
+<tr><td class="pad" style="padding:16px 40px 0;{{ cell_label() }}font-size:14px;line-height:20px;color:#6b6a75;">{{ remaining_brands }} other brand{{ 's' if remaining_brands != 1 else '' }}, retained and new, {{ 'are' if remaining_brands != 1 else 'is' }} in the pipeline. The full list is in the attached Excel file.</td></tr>
 {%- endif %}
 
 {%- if leaderboard.entries %}

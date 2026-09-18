@@ -147,9 +147,15 @@ class PipedriveClient:
         return result
 
     def all_organizations(self) -> list[dict]:
-        """Every organisation with its won-deal count, for brand clustering."""
+        """Every organisation, with won-deal counts and custom fields.
+
+        Brand clustering has to see organisations that hold only closed
+        business: a duplicate record carrying the won history often has no open
+        deals, so fetching just the ones in the pipeline hides it.
+        """
         return list(self._paginate_v2(
-            "/api/v2/organizations", {"include_fields": "won_deals_count"}
+            "/api/v2/organizations",
+            {"include_fields": "won_deals_count", "include_option_labels": "true"},
         ))
 
     def persons_by_org(self, org_ids: set[int]) -> dict[int, list[dict]]:
