@@ -354,3 +354,65 @@ def test_the_fallback_never_repeats_a_brand_already_listed():
     html = render_email(data, title="T", greeting_name="John", sender_name="V")
     assert "Top new business in the pipeline" in html
     assert html.count(f">{new_business[0].name}<") == 1
+
+
+# -- deals with no organisation linked ------------------------------------
+def _payload_with_unlinked_deal(title: str, value: float = 60_000.0) -> dict:
+    """The reference payload plus one deal whose org_id is None."""
+    payload = fixture.load()
+    template = payload["deals_payload"][0]
+    payload["deals_payload"] = payload["deals_payload"] + [
+        {
+            **template,
+            "id": 999_999,
+            "title": title,
+            "org_id": None,
+            "person_id": None,
+            "value": value,
+            "currency": "GBP",
+        }
+    ]
+    return payload
+
+
+def test_a_deal_with_no_organisation_still_counts(data):
+    """Dropping it would silently under-report the stage and pipeline totals."""
+    payload = _payload_with_unlinked_deal("Pemberton Tea Rooms x TikTok Campaign")
+    report = build_report(**payload)
+
+    assert report.open_deal_count == data.open_deal_count + 1
+    assert round(report.pipeline_gbp) == round(data.pipeline_gbp) + 60_000
+
+    kept = report.deals_missing_organisation[0]
+    before = next(s for s in data.by_stage() if s["stage"] == kept.stage)
+    after = next(s for s in report.by_stage() if s["stage"] == kept.stage)
+    assert after["deals"] == before["deals"] + 1
+
+
+def test_an_unlinked_deal_takes_its_brand_from_the_title():
+    report = build_report(**_payload_with_unlinked_deal("Pemberton Tea Rooms x TikTok Campaign"))
+    kept = report.deals_missing_organisation
+    assert [d.brand for d in kept] == ["Pemberton Tea Rooms"]
+
+    brand = next(b for b in report.brands if b.name == "Pemberton Tea Rooms")
+    # No brand key, so it can never be announced to John as new or written to
+    # the history table on the strength of a deal title alone.
+    assert brand.brand_key == ""
+    assert brand.is_new_this_report is False
+    assert brand.name not in {b["brand_name"] for b in report.brand_records()}
+
+
+def test_an_unlinked_deal_rejoins_a_brand_it_names_exactly(data):
+    known = data.brands[0].name
+    report = build_report(**_payload_with_unlinked_deal(f"{known} x Winter Campaign"))
+
+    assert len(report.brands) == len(data.brands)  # no duplicate brand row
+    brand = next(b for b in report.brands if b.name == known)
+    assert brand.open_deals == data.brands[0].open_deals + 1
+    assert brand.client_status == data.brands[0].client_status
+    assert brand.brand_key == data.brands[0].brand_key
+
+
+def test_an_unlinked_deal_with_no_usable_title_is_dropped(data):
+    report = build_report(**_payload_with_unlinked_deal(""))
+    assert report.open_deal_count == data.open_deal_count

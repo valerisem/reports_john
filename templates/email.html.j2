@@ -118,6 +118,7 @@ body{margin:0;padding:0;-webkit-text-size-adjust:100%;}
 <td class="val" width="128" valign="middle" style="padding:4px 0 4px 10px;{{ cell_label() }}font-size:14px;line-height:18px;font-weight:700;color:#15141f;white-space:nowrap;">{{ row.value }}<span class="dl" style="font-weight:400;color:#6b6a75;">&nbsp;&nbsp;{{ row.deals }} deal{{ 's' if row.deals != 1 else '' }}</span></td></tr>
 {%- endfor %}
 </table></td></tr>
+{%- if section.footnote %}<tr><td class="pad" style="padding:14px 40px 0;{{ cell_label() }}font-size:12px;line-height:18px;font-style:italic;color:#9a99a5;text-align:center;">{{ section.footnote }}</td></tr>{% endif %}
 {%- endfor %}
 
 <tr><td class="pad" style="padding:40px 40px {{ 18 if footer_image_url else 36 }}px;{{ cell_label() }}font-size:16px;line-height:24px;color:#2b2a35;">Kindly,<br><span style="font-weight:700;color:#15141f;">{{ sender_name }}</span></td></tr>

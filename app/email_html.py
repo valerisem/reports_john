@@ -237,6 +237,9 @@ def render_email(
             {
                 "heading": "Pipeline by stage",
                 "subtitle": f"{compact_gbp(data.pipeline_gbp)} total",
+                # Pipedrive's own board shows these stages weighted by close
+                # probability, so say plainly that these bars are not.
+                "footnote": "Full deal value, not weighted by close probability.",
                 "colour": ACCENT_PINK,
                 "rows": stage_bars,
             },

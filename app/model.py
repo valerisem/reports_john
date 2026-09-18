@@ -1,12 +1,13 @@
 """Report data model: turns raw Pipedrive payloads into report-ready rows."""
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any, Iterable
 
 from .brand_history import BrandHistory
-from .brands import Brand, resolve_brands
+from .brands import Brand, is_placeholder, normalise_name, resolve_brands
 from .team_directory import TeamDirectory
 
 # Pipedrive stage name -> the friendlier label used in the newsletter.
@@ -53,6 +54,9 @@ class DealRow:
     industry: str
     sub_industry: str
     website: str
+    # True when no organisation was linked in Pipedrive and the brand name had
+    # to be read off the deal title instead.
+    brand_from_title: bool = False
 
 
 @dataclass
@@ -122,6 +126,15 @@ class ReportData:
         pool = [b for b in self.brands if b.is_new_this_report]
         pool.sort(key=lambda b: (-b.weighted_gbp, b.name.lower()))
         return pool
+
+    @property
+    def deals_missing_organisation(self) -> list[DealRow]:
+        """Deals kept in the totals despite having no organisation linked.
+
+        Worth surfacing: each one is a Pipedrive data gap, and its brand name
+        is only as good as whatever the deal title leads with.
+        """
+        return [deal for deal in self.deals if deal.brand_from_title]
 
     def brand_records(self) -> list[dict]:
         """Rows for the history store, so these are not announced again."""
@@ -304,6 +317,31 @@ def _ordered_by_value(pairs: dict[str, float]) -> list[str]:
     return [name for name, _ in sorted(pairs.items(), key=lambda kv: (-kv[1], kv[0].lower()))]
 
 
+# Deal titles are written "<Brand> x <campaign>" or "<Brand> SOW 1 - OCT 26",
+# so the leading segment is a usable brand name when nobody linked an
+# organisation to the deal.
+_TITLE_SEPARATORS = (" x ", " X ", " - ", " \u2013 ", " \u2014 ", " / ", " | ")
+_TITLE_TAIL = re.compile(r"\s+(sow|fy)\b.*$", re.IGNORECASE)
+
+
+def brand_from_deal_title(title: str) -> str:
+    """Best-effort brand name for a deal with no organisation linked.
+
+    Dropping such a deal would silently under-report the stage and pipeline
+    totals, so the report keeps it under whatever the title leads with. The
+    result carries no brand key, so it can never be announced to John as a new
+    brand or written to the history table.
+    """
+    full = _text(title, default="").strip()
+    name = full
+    for separator in _TITLE_SEPARATORS:
+        head = name.split(separator, 1)[0].strip()
+        if head:
+            name = head
+    name = _TITLE_TAIL.sub("", name).strip()
+    return name or full
+
+
 def build_report(
     *,
     report_date: date,
@@ -348,14 +386,35 @@ def build_report(
     industry_key = field_keys.get("org_industry")
     sub_industry_key = field_keys.get("org_sub_industry")
 
+    # An unlinked deal is matched back to a real brand only on an identical
+    # normalised name - the same conservative rule the resolver uses, so no
+    # fuzzy matching can invent a duplicate.
+    brand_by_normalised: dict[str, Brand] = {}
+    for resolved_brand in brands_by_org.values():
+        brand_by_normalised.setdefault(normalise_name(resolved_brand.name), resolved_brand)
+
     deal_rows: list[DealRow] = []
     for deal in deals_payload:
         org_id = deal.get("org_id")
         org = orgs.get(org_id) or {}
         resolved = brands_by_org.get(org_id)
         brand = _text(resolved.name if resolved else org.get("name"), default="")
+        brand_from_title = False
         if not brand:
-            continue  # a deal with no organisation has no brand to report on
+            # Nobody linked an organisation to this deal. Keep it anyway - a
+            # dropped deal quietly under-reports the stage and pipeline totals
+            # - and read the brand off the deal title.
+            brand = brand_from_deal_title(deal.get("title"))
+            brand_from_title = True
+            key = normalise_name(brand)
+            match = None if is_placeholder(brand) else brand_by_normalised.get(key)
+            if match is not None:
+                # The title names a brand already in the pipeline, so the deal
+                # joins it and inherits its real key and client status.
+                resolved = match
+                brand = resolved.name
+        if not brand:
+            continue  # nothing to report on: no organisation and no title
 
         stage_name = stage_by_id.get(deal.get("stage_id"))
         stage = stage_meta.get(stage_name)
@@ -409,6 +468,7 @@ def build_report(
                 industry=_text(_custom(org, industry_key), default=""),
                 sub_industry=_text(_custom(org, sub_industry_key), default=""),
                 website=_text(org.get("website"), default=""),
+                brand_from_title=brand_from_title,
             )
         )
 
