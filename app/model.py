@@ -203,6 +203,23 @@ class ReportData:
         return rows
 
     # -- newsletter lists --------------------------------------------------
+    def by_stage_owner(self) -> dict[str, dict[str, float]]:
+        """Each stage's unweighted value split by account owner.
+
+        The newsletter stacks every stage bar by owner, so it needs the
+        cross-tab that ``by_stage`` and ``by_owner`` each flatten away.
+        """
+        split: dict[str, dict[str, float]] = {}
+        for stage in self.stages:
+            owners: dict[str, float] = {}
+            for deal in self.deals:
+                if deal.stage == stage.name:
+                    owners[deal.account_owner] = (
+                        owners.get(deal.account_owner, 0.0) + deal.value_gbp
+                    )
+            split[stage.name] = owners
+        return split
+
     def top_brands(self, status: str, limit: int = 10) -> list[BrandRow]:
         pool = [b for b in self.brands if b.client_status == status]
         pool.sort(key=lambda b: (-b.weighted_gbp, b.name.lower()))

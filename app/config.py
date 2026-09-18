@@ -59,6 +59,15 @@ class Settings(BaseSettings):
         "https://tciqyupqtpbhremuprxe.supabase.co/storage/v1/object/public/"
         "reports%20for%20john/email-logo.png"
     )
+    # Die-cut head shots for the leaderboard, one per account owner. {name} is
+    # their first name in lower case, so the default resolves to
+    # ".../reports for john/valeriia.png". Transparent PNGs: a JPEG cannot
+    # carry transparency and shows its background behind the head. An owner
+    # with no file simply appears without a picture.
+    owner_photo_url_template: str = (
+        "https://tciqyupqtpbhremuprxe.supabase.co/storage/v1/object/public/"
+        "reports%20for%20john/{name}.png"
+    )
 
     # Currency fallbacks, used when the live FX lookup fails.
     fx_fallback_usd_gbp: float = 0.74
