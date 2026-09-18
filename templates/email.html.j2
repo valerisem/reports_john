@@ -71,13 +71,39 @@ body{margin:0;padding:0;-webkit-text-size-adjust:100%;}
 <tr><td class="pad" style="padding:16px 40px 0;{{ cell_label() }}font-size:14px;line-height:20px;color:#6b6a75;">{{ remaining_brands }} more brand{{ 's' if remaining_brands != 1 else '' }} {{ 'are' if remaining_brands != 1 else 'is' }} in the pipeline. The full list is in the attached Excel file.</td></tr>
 {%- endif %}
 
+{%- if leaderboard.entries %}
+<tr><td class="pad" style="padding:52px 40px 0;"><div class="sh" style="{{ cell_label() }}font-size:24px;line-height:30px;font-weight:700;color:#15141f;letter-spacing:-0.3px;text-align:center;">{{ leaderboard.heading }}</div>
+{{ rule() }}</td></tr>
+<tr><td class="pad" style="padding:26px 40px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+{%- for entry in leaderboard.entries %}
+<td width="33%" align="center" valign="bottom" style="padding:0 6px;text-align:center;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
+{%- if entry.photo %}
+<tr><td align="center" style="padding:0 0 4px;"><img src="{{ entry.photo }}" height="46" alt="{{ entry.name }}" style="display:block;height:46px;width:auto;border:0;margin:0 auto;"></td></tr>
+{%- endif %}
+<tr><td align="center" style="{{ cell_label() }}font-size:13px;line-height:17px;color:#2b2a35;">{{ entry.name }}</td></tr>
+<tr><td align="center" style="{{ cell_label() }}font-size:19px;line-height:24px;font-weight:700;color:#15141f;letter-spacing:-0.3px;padding-top:2px;">{{ entry.value }}</td></tr>
+<tr><td align="center" style="{{ cell_label() }}font-size:12px;line-height:16px;color:#6b6a75;">{{ entry.deals }} deal{{ 's' if entry.deals != 1 else '' }}</td></tr>
+<tr><td align="center" style="padding-top:10px;"><table role="presentation" width="56" cellpadding="0" cellspacing="0" border="0" align="center" style="width:56px;margin:0 auto;"><tr><td width="56" height="{{ entry.height }}" bgcolor="{{ entry.colour }}" align="center" valign="top" style="width:56px;height:{{ entry.height }}px;background-color:{{ entry.colour }};padding-top:10px;{{ cell_label() }}font-size:18px;line-height:22px;font-weight:700;color:{{ entry.numeral_colour }};">{{ entry.rank }}</td></tr></table></td></tr>
+</table>
+</td>
+{%- endfor %}
+</tr></table></td></tr>
+{%- endif %}
+
 {%- for section in bar_sections %}
 <tr><td class="pad" style="padding:52px 40px 0;"><div class="sh" style="{{ cell_label() }}font-size:24px;line-height:30px;font-weight:700;color:#15141f;letter-spacing:-0.3px;text-align:center;">{{ section.heading }}</div>
 {{ rule() }}{% if section.subtitle %}<div style="{{ cell_label() }}font-size:14px;line-height:20px;color:#6b6a75;padding-top:12px;text-align:center;">{{ section.subtitle }}</div>{% endif %}</td></tr>
 <tr><td class="pad" style="padding:18px 40px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 {%- for row in section.rows %}
 <tr><td class="lab" width="150" valign="middle" align="right" style="padding:4px 12px 4px 0;{{ cell_label() }}font-size:14px;line-height:18px;color:#2b2a35;">{{ row.label }}</td>
-<td valign="middle" style="padding:4px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="{{ row.percent }}%" height="28" bgcolor="{{ section.colour }}" style="background-color:{{ section.colour }};height:28px;font-size:0;line-height:0;">&nbsp;</td>{% if row.percent < 100 %}<td width="{{ 100 - row.percent }}%" style="font-size:0;line-height:0;">&nbsp;</td>{% endif %}</tr></table></td>
+<td valign="middle" style="padding:4px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+{%- if row.segments %}{% set filled = row.segments | sum(attribute='percent') %}
+{%- for seg in row.segments %}<td width="{{ seg.percent }}%" height="16" bgcolor="{{ seg.colour }}" style="width:{{ seg.percent }}%;height:16px;background-color:{{ seg.colour }};font-size:0;line-height:0;">&nbsp;</td>{% endfor %}
+{%- if filled < 100 %}<td width="{{ 100 - filled }}%" style="font-size:0;line-height:0;">&nbsp;</td>{% endif %}
+{%- else %}<td width="{{ row.percent }}%" height="16" bgcolor="{{ section.colour }}" style="background-color:{{ section.colour }};height:16px;font-size:0;line-height:0;">&nbsp;</td>{% if row.percent < 100 %}<td width="{{ 100 - row.percent }}%" style="font-size:0;line-height:0;">&nbsp;</td>{% endif %}
+{%- endif %}
+</tr></table></td>
 <td class="val" width="128" valign="middle" style="padding:4px 0 4px 10px;{{ cell_label() }}font-size:14px;line-height:18px;font-weight:700;color:#15141f;white-space:nowrap;">{{ row.value }}<span class="dl" style="font-weight:400;color:#6b6a75;">&nbsp;&nbsp;{{ row.deals }} deal{{ 's' if row.deals != 1 else '' }}</span></td></tr>
 {%- endfor %}
 </table></td></tr>

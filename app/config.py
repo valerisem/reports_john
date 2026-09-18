@@ -59,6 +59,13 @@ class Settings(BaseSettings):
         "https://tciqyupqtpbhremuprxe.supabase.co/storage/v1/object/public/"
         "reports%20for%20john/email-logo.png"
     )
+    # Die-cut head shots for the leaderboard, one per account owner, named
+    # after their first name in lower case: ".../owner-valeriia.png". An owner
+    # with no file simply shows without a picture.
+    owner_photo_base_url: str = (
+        "https://tciqyupqtpbhremuprxe.supabase.co/storage/v1/object/public/"
+        "reports%20for%20john"
+    )
 
     # Currency fallbacks, used when the live FX lookup fails.
     fx_fallback_usd_gbp: float = 0.74

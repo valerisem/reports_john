@@ -6,7 +6,7 @@ import io
 import openpyxl
 import pytest
 
-from app.email_html import render_email
+from app.email_html import _leaderboard, _stage_segments, render_email
 from app.excel import build_workbook
 from app.formatting import bar_percent, compact_gbp, first_name
 from app.model import EXISTING, NEW_BUSINESS, build_report
@@ -213,3 +213,49 @@ def test_test_mode_banner_names_the_real_recipients(data):
     assert "TEST MODE" in marked
     assert "john@example.com" in marked and "ops@example.com" in marked
     assert "TEST MODE" not in render_email(data, title="T", greeting_name="John", sender_name="V")
+
+
+# -- the leaderboard and the stacked stage bars ----------------------------
+def test_stage_owner_split_adds_up_to_each_stage_total(data):
+    split = data.by_stage_owner()
+    for row in data.by_stage():
+        if not row["deals"]:
+            continue
+        assert sum(split[row["stage"]].values()) == pytest.approx(row["value_gbp"])
+
+
+def test_leaderboard_runs_second_first_third(data):
+    entries = _leaderboard(data.by_owner(), "https://example.test/art")
+    assert [e["rank"] for e in entries] == [2, 1, 3]
+    assert entries[1]["name"] == "Valeriia"
+    # the tallest column belongs to the winner
+    assert entries[1]["height"] == max(e["height"] for e in entries)
+
+
+def test_leaderboard_names_each_owner_photo_after_their_first_name(data):
+    entries = _leaderboard(data.by_owner(), "https://example.test/art/")
+    assert entries[1]["photo"] == "https://example.test/art/owner-valeriia.png"
+    assert all(e["photo"] for e in entries)
+    assert all(e["photo"] == "" for e in _leaderboard(data.by_owner(), ""))
+
+
+def test_stage_segments_keep_one_order_and_fill_the_bar(data):
+    entries = _leaderboard(data.by_owner(), "")
+    split = data.by_stage_owner()
+    orders = []
+    for row in data.by_stage():
+        if not row["deals"]:
+            continue
+        percent = bar_percent(row["value_gbp"], max(r["value_gbp"] for r in data.by_stage()), 94)
+        segments = _stage_segments(row["stage"], row["value_gbp"], percent, split, entries)
+        assert sum(s["percent"] for s in segments) == percent
+        orders.append([s["colour"] for s in segments])
+    # every bar stacks the owners in the same order, so the bars compare
+    assert len(set(tuple(o) for o in orders)) == 1
+
+
+def test_email_renders_the_leaderboard_ahead_of_the_stage_chart(data):
+    html = render_email(data, title="T", greeting_name="John", sender_name="V")
+    assert html.index("Weighted Pipeline Leaderboard") < html.index("Pipeline by stage")
+    assert "Weighted by account owner" not in html
+    assert "owner-valeriia.png" in html
