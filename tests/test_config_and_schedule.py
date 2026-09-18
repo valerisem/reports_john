@@ -88,3 +88,9 @@ def test_empty_recipient_env_vars_are_tolerated(monkeypatch):
     settings = Settings(_env_file=None)
     assert settings.mail_to == []
     assert settings.mail_cc == []
+
+
+def test_the_period_wording_follows_the_cadence():
+    """The email must not say "fortnight" while the scheduler runs weekly."""
+    assert _settings(schedule_fortnightly=True).period_label == "fortnight"
+    assert _settings(schedule_fortnightly=False).period_label == "week"

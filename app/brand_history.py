@@ -1,8 +1,8 @@
 """What the report has already told John about.
 
 The email flags a brand as new business only the first time it appears. Without
-a record of what has been sent, the same names would be announced fortnight
-after fortnight. Pipedrive cannot answer this — it knows a brand is new
+a record of what has been sent, the same names would be announced week
+after week. Pipedrive cannot answer this — it knows a brand is new
 business, not whether we have mentioned it — so it lives in Supabase.
 
 Writes happen only after a live send. A test send never marks a brand as

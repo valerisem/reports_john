@@ -47,9 +47,9 @@ class Settings(BaseSettings):
     report_sender_name: str = "Valeria"
     report_timezone: str = "Europe/London"
 
-    # Some fortnights bring almost no new brands. Below this many, the email
-    # also shows the biggest new business already in the pipeline, so the
-    # section is never near-empty.
+    # Some periods bring almost no new brands. Below this many, the email also
+    # shows the biggest new business already in the pipeline, so the section is
+    # never near-empty.
     new_brand_min: int = 3
     new_brand_fallback_count: int = 5
 
@@ -122,6 +122,15 @@ class Settings(BaseSettings):
     @classmethod
     def _parse_emails(cls, value):
         return _split_emails(value)
+
+    @property
+    def period_label(self) -> str:
+        """"week" or "fortnight", taken from the cadence.
+
+        Derived rather than configured so the email cannot claim one cadence
+        while the scheduler runs another.
+        """
+        return "fortnight" if self.schedule_fortnightly else "week"
 
     def field_overrides(self) -> dict[str, str]:
         return {

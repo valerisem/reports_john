@@ -195,8 +195,8 @@ def test_email_shows_the_headline_stats(html, data):
 
 
 def test_email_lists_ten_brands_per_column(html, data):
-    assert "Top 10 clients" in html
-    assert "New this fortnight" in html
+    assert "Top 10 retained clients" in html
+    assert "New this week" in html  # wording follows the cadence
     # Without history nothing counts as new, so that column is empty.
     assert data.brands_new_this_report == []
     assert "No new brands since the last update." in html
@@ -316,14 +316,14 @@ def test_the_loaded_history_reaches_the_report():
     assert built.history.reported_keys == {"runwayml.com"}
 
 
-# -- quiet fortnights ------------------------------------------------------
+# -- quiet periods ------------------------------------------------------
 def _with_history(reported: set[str]):
     from app.brand_history import BrandHistory
 
     return build_report(**dict(fixture.load()), history=BrandHistory(reported_keys=reported, loaded=True))
 
 
-def test_a_quiet_fortnight_falls_back_to_the_biggest_new_business():
+def test_a_quiet_period_falls_back_to_the_biggest_new_business():
     """Nothing new: the column still carries the top new business rather than
     showing John an empty box."""
     data = _with_history({b.brand_key for b in build_report(**fixture.load()).brands})
@@ -334,7 +334,7 @@ def test_a_quiet_fortnight_falls_back_to_the_biggest_new_business():
     assert html.count("POC:") == 5
 
 
-def test_a_busy_fortnight_shows_only_the_genuinely_new():
+def test_a_busy_period_shows_only_the_genuinely_new():
     """Three or more new brands is enough on its own; no fallback."""
     data = _with_history(set())
     assert len(data.brands_new_this_report) >= 3

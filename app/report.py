@@ -83,6 +83,7 @@ def build(settings: Settings, data: ReportData) -> Artefacts:
         sender_name=settings.report_sender_name,
         test_banner=banner,
         new_brand_min=settings.new_brand_min,
+        period_label=settings.period_label,
         new_brand_fallback_count=settings.new_brand_fallback_count,
         header_image_url=settings.header_image_url,
         footer_image_url=settings.footer_image_url,

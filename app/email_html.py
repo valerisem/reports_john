@@ -150,6 +150,7 @@ def render_email(
     sender_name: str,
     test_banner: dict | None = None,
     new_brand_min: int = 3,
+    period_label: str = "week",
     new_brand_fallback_count: int = 5,
     header_image_url: str = HEADER_IMAGE_URL,
     footer_image_url: str = FOOTER_IMAGE_URL,
@@ -169,7 +170,7 @@ def render_email(
 
     top_existing = _brand_entries(data, EXISTING, with_poc=False)
     # Only brands John has not been told about before, so the same names are
-    # not re-announced fortnight after fortnight. Often this is empty.
+    # not re-announced week after week. Often this is empty.
     def entry(brand) -> dict:
         return {
             "name": brand.name,
@@ -181,7 +182,7 @@ def render_email(
     new_brands = data.brands_new_this_report[:10]
     top_new = [entry(b) for b in new_brands]
 
-    # A quiet fortnight would otherwise leave this column almost empty, so back
+    # A quiet period would otherwise leave this column almost empty, so back
     # it with the biggest new business already in the pipeline - excluding
     # anything just listed above, which would read as a duplicate.
     fallback: list[dict] = []
@@ -218,9 +219,9 @@ def render_email(
             },
         ],
         "brand_columns": [
-            {"heading": "Top 10 clients", "brands": top_existing},
+            {"heading": "Top 10 retained clients", "brands": top_existing},
             {
-                "heading": "New this fortnight",
+                "heading": f"New this {period_label}",
                 "brands": top_new,
                 "empty_note": "No new brands since the last update.",
                 "extra_heading": "Top new business in the pipeline" if fallback else "",
