@@ -47,6 +47,12 @@ class Settings(BaseSettings):
     report_sender_name: str = "Valeria"
     report_timezone: str = "Europe/London"
 
+    # Some fortnights bring almost no new brands. Below this many, the email
+    # also shows the biggest new business already in the pipeline, so the
+    # section is never near-empty.
+    new_brand_min: int = 3
+    new_brand_fallback_count: int = 5
+
     # Header artwork and logo, so they can be swapped without a code change.
     header_image_url: str = (
         "https://tciqyupqtpbhremuprxe.supabase.co/storage/v1/object/public/"

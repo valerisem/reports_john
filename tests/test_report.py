@@ -199,13 +199,17 @@ def test_email_lists_ten_brands_per_column(html, data):
     assert "New this fortnight" in html
     # Without history nothing counts as new, so that column is empty.
     assert data.brands_new_this_report == []
-    assert "No new brands entered the pipeline since the last update." in html
-    assert html.count("POC:") == 0
+    assert "No new brands since the last update." in html
+    # The fallback fills the column so it is never near-empty.
+    assert "Top new business in the pipeline" in html
+    assert html.count("POC:") == 5
 
 
 def test_email_counts_the_brands_not_shown(html, data):
     shown = min(10, sum(1 for b in data.brands if b.client_status == EXISTING))
     shown += len(data.brands_new_this_report[:10])
+    if len(data.brands_new_this_report) < 3:
+        shown += 5      # the fallback list
     assert f"{len(data.brands) - shown} more brands are in the pipeline" in html
 
 
@@ -298,3 +302,55 @@ def test_new_business_share_is_value_based(data):
         data.new_business_gbp / data.pipeline_gbp
     )
     assert 0.0 < data.new_business_share < 1.0
+
+
+def test_the_loaded_history_reaches_the_report():
+    """Regression: the history was fetched, then dropped on the floor, so
+    every brand looked un-announced no matter what Supabase held."""
+    from app.brand_history import BrandHistory
+
+    payload = dict(fixture.load())
+    known = BrandHistory(reported_keys={"runwayml.com"}, loaded=True)
+    built = build_report(**payload, history=known)
+    assert built.history.loaded is True
+    assert built.history.reported_keys == {"runwayml.com"}
+
+
+# -- quiet fortnights ------------------------------------------------------
+def _with_history(reported: set[str]):
+    from app.brand_history import BrandHistory
+
+    return build_report(**dict(fixture.load()), history=BrandHistory(reported_keys=reported, loaded=True))
+
+
+def test_a_quiet_fortnight_falls_back_to_the_biggest_new_business():
+    """Nothing new: the column still carries the top new business rather than
+    showing John an empty box."""
+    data = _with_history({b.brand_key for b in build_report(**fixture.load()).brands})
+    assert data.brands_new_this_report == []
+    html = render_email(data, title="T", greeting_name="John", sender_name="V")
+    assert "No new brands since the last update." in html
+    assert "Top new business in the pipeline" in html
+    assert html.count("POC:") == 5
+
+
+def test_a_busy_fortnight_shows_only_the_genuinely_new():
+    """Three or more new brands is enough on its own; no fallback."""
+    data = _with_history(set())
+    assert len(data.brands_new_this_report) >= 3
+    html = render_email(data, title="T", greeting_name="John", sender_name="V")
+    assert "Top new business in the pipeline" not in html
+
+
+def test_the_fallback_never_repeats_a_brand_already_listed():
+    all_brands = build_report(**fixture.load()).brands
+    new_business = sorted(
+        (b for b in all_brands if b.client_status == NEW_BUSINESS),
+        key=lambda b: -b.weighted_gbp,
+    )
+    # Everything reported except the single biggest new-business brand.
+    data = _with_history({b.brand_key for b in all_brands} - {new_business[0].brand_key})
+    assert len(data.brands_new_this_report) == 1
+    html = render_email(data, title="T", greeting_name="John", sender_name="V")
+    assert "Top new business in the pipeline" in html
+    assert html.count(f">{new_business[0].name}<") == 1

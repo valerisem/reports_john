@@ -67,6 +67,12 @@ body{margin:0;padding:0;-webkit-text-size-adjust:100%;}
 {%- for brand in column.brands %}
 <tr><td valign="top" style="border-top:1px solid #e7e5ec;padding:10px 12px 10px 0;{{ cell_label() }}font-size:15px;line-height:21px;color:#15141f;">{% if brand.url %}<a href="{{ brand.url }}" style="color:#15141f;text-decoration:none;">{{ brand.name }}</a>{% else %}{{ brand.name }}{% endif %}{% if brand.poc %}<div style="{{ cell_label() }}font-size:13px;line-height:18px;color:#6b6a75;padding-top:1px;">POC: {{ brand.poc }}</div>{% endif %}</td><td align="right" valign="top" style="border-top:1px solid #e7e5ec;padding:10px 0;{{ cell_label() }}font-size:15px;line-height:21px;font-weight:700;color:#15141f;white-space:nowrap;">{{ brand.value }}</td></tr>
 {%- endfor %}
+{%- if column.extra_brands %}
+<tr><td colspan="2" style="padding:22px 0 10px;{{ cell_label() }}font-size:15px;line-height:20px;font-weight:700;color:#e91e8c;">{{ column.extra_heading }}</td></tr>
+{%- for brand in column.extra_brands %}
+<tr><td valign="top" style="border-top:1px solid #e7e5ec;padding:10px 12px 10px 0;{{ cell_label() }}font-size:15px;line-height:21px;color:#15141f;">{% if brand.url %}<a href="{{ brand.url }}" style="color:#15141f;text-decoration:none;">{{ brand.name }}</a>{% else %}{{ brand.name }}{% endif %}{% if brand.poc %}<div style="{{ cell_label() }}font-size:13px;line-height:18px;color:#6b6a75;padding-top:1px;">POC: {{ brand.poc }}</div>{% endif %}</td><td align="right" valign="top" style="border-top:1px solid #e7e5ec;padding:10px 0;{{ cell_label() }}font-size:15px;line-height:21px;font-weight:700;color:#15141f;white-space:nowrap;">{{ brand.value }}</td></tr>
+{%- endfor %}
+{%- endif %}
 </table></td>
 {%- endfor %}
 </tr></table></td></tr>

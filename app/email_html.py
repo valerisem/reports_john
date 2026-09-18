@@ -149,6 +149,8 @@ def render_email(
     greeting_name: str,
     sender_name: str,
     test_banner: dict | None = None,
+    new_brand_min: int = 3,
+    new_brand_fallback_count: int = 5,
     header_image_url: str = HEADER_IMAGE_URL,
     footer_image_url: str = FOOTER_IMAGE_URL,
     logo_url: str = LOGO_URL,
@@ -168,17 +170,30 @@ def render_email(
     top_existing = _brand_entries(data, EXISTING, with_poc=False)
     # Only brands John has not been told about before, so the same names are
     # not re-announced fortnight after fortnight. Often this is empty.
-    new_brands = data.brands_new_this_report[:10]
-    top_new = [
-        {
-            "name": b.name,
-            "url": website_url(b.website),
-            "value": compact_gbp(b.weighted_gbp),
-            "poc": b.contacts[0] if b.contacts else "",
+    def entry(brand) -> dict:
+        return {
+            "name": brand.name,
+            "url": website_url(brand.website),
+            "value": compact_gbp(brand.weighted_gbp),
+            "poc": brand.contacts[0] if brand.contacts else "",
         }
-        for b in new_brands
-    ]
-    shown = len(top_existing) + len(top_new)
+
+    new_brands = data.brands_new_this_report[:10]
+    top_new = [entry(b) for b in new_brands]
+
+    # A quiet fortnight would otherwise leave this column almost empty, so back
+    # it with the biggest new business already in the pipeline - excluding
+    # anything just listed above, which would read as a duplicate.
+    fallback: list[dict] = []
+    if len(new_brands) < new_brand_min:
+        already = {b.name for b in new_brands}
+        fallback = [
+            entry(b)
+            for b in data.top_brands(NEW_BUSINESS, limit=new_brand_fallback_count + len(already))
+            if b.name not in already
+        ][:new_brand_fallback_count]
+
+    shown = len(top_existing) + len(top_new) + len(fallback)
 
     context = {
         "title": title,
@@ -207,7 +222,9 @@ def render_email(
             {
                 "heading": "New this fortnight",
                 "brands": top_new,
-                "empty_note": "No new brands entered the pipeline since the last update.",
+                "empty_note": "No new brands since the last update.",
+                "extra_heading": "Top new business in the pipeline" if fallback else "",
+                "extra_brands": fallback,
             },
         ],
         "remaining_brands": max(0, len(data.brands) - shown),

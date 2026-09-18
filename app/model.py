@@ -488,4 +488,5 @@ def build_report(
         account_managers=_ordered_by_value(manager_totals),
         industries=_ordered_by_value(industry_totals),
         directory=directory,
+        history=history,
     )
