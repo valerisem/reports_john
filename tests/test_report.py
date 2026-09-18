@@ -8,7 +8,7 @@ import pytest
 
 from app.email_html import _leaderboard, _stage_segments, render_email
 from app.excel import build_workbook
-from app.formatting import bar_percent, compact_gbp, first_name
+from app.formatting import bar_percent, compact_gbp, first_name, percent
 from app.model import EXISTING, NEW_BUSINESS, build_report
 from tests import fixture
 
@@ -26,7 +26,9 @@ def workbook(data):
 # -- the numbers -----------------------------------------------------------
 def test_headline_numbers_match_the_reference_report(data):
     assert data.open_deal_count == 129
-    assert len(data.brands) == 104
+    # 103, not the reference workbook's 104: "Olymptrade" and
+    # "Maree/Olymptrade" share a website and are now one brand.
+    assert len(data.brands) == 103
     assert data.new_brand_count == 53
     assert round(data.pipeline_gbp) == 7_430_747
     assert round(data.weighted_gbp) == 4_352_052
@@ -186,17 +188,25 @@ def test_email_greets_the_recipient_and_signs_off(html):
 def test_email_shows_the_headline_stats(html, data):
     assert f">{data.open_deal_count:,}<" in html
     assert compact_gbp(data.weighted_gbp) in html
-    assert f">{data.new_brand_count:,}<" in html
+    # The third tile is the new/retained split by value, not a brand count:
+    # a raw count of new brands goes stale and repeats week after week.
+    assert percent(data.new_business_share) in html
+    assert "New business" in html
 
 
-def test_email_lists_ten_brands_per_column(html):
+def test_email_lists_ten_brands_per_column(html, data):
     assert "Top 10 clients" in html
-    assert "Top 10 new business" in html
-    assert html.count("POC:") == 10
+    assert "New this fortnight" in html
+    # Without history nothing counts as new, so that column is empty.
+    assert data.brands_new_this_report == []
+    assert "No new brands entered the pipeline since the last update." in html
+    assert html.count("POC:") == 0
 
 
 def test_email_counts_the_brands_not_shown(html, data):
-    assert f"{len(data.brands) - 20} more brands are in the pipeline" in html
+    shown = min(10, sum(1 for b in data.brands if b.client_status == EXISTING))
+    shown += len(data.brands_new_this_report[:10])
+    assert f"{len(data.brands) - shown} more brands are in the pipeline" in html
 
 
 def test_email_uses_friendly_stage_labels(html):
@@ -259,3 +269,32 @@ def test_email_renders_the_leaderboard_ahead_of_the_stage_chart(data):
     assert html.index("Weighted Pipeline Leaderboard") < html.index("Pipeline by stage")
     assert "Weighted by account owner" not in html
     assert "/valeriia.png" in html
+
+
+# -- brand identity in the report ------------------------------------------
+def test_duplicate_organisation_records_collapse_into_one_brand(data):
+    """Records sharing a website are one brand, so the figures are not split."""
+    names = [b.name for b in data.brands]
+    assert len(names) == len(set(names))
+    assert "Maree/Olymptrade" not in names
+    olymptrade = next(b for b in data.brands if b.name == "Olymptrade")
+    assert olymptrade.is_duplicated is True
+
+
+def test_every_brand_carries_a_stable_key(data):
+    keys = [b.brand_key for b in data.brands]
+    assert all(keys)
+    assert len(keys) == len(set(keys))
+
+
+def test_nothing_is_flagged_new_without_history(data):
+    """A Supabase outage should quieten the email, not re-announce everything."""
+    assert data.history.loaded is False
+    assert data.brands_new_this_report == []
+
+
+def test_new_business_share_is_value_based(data):
+    assert data.new_business_share == pytest.approx(
+        data.new_business_gbp / data.pipeline_gbp
+    )
+    assert 0.0 < data.new_business_share < 1.0

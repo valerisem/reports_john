@@ -5,7 +5,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from .formatting import bar_percent, compact_gbp, first_name, website_url
+from .formatting import bar_percent, compact_gbp, first_name, percent, website_url
 from .model import EXISTING, NEW_BUSINESS, ReportData
 
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
@@ -166,7 +166,18 @@ def render_email(
         )
 
     top_existing = _brand_entries(data, EXISTING, with_poc=False)
-    top_new = _brand_entries(data, NEW_BUSINESS, with_poc=True)
+    # Only brands John has not been told about before, so the same names are
+    # not re-announced fortnight after fortnight. Often this is empty.
+    new_brands = data.brands_new_this_report[:10]
+    top_new = [
+        {
+            "name": b.name,
+            "url": website_url(b.website),
+            "value": compact_gbp(b.weighted_gbp),
+            "poc": b.contacts[0] if b.contacts else "",
+        }
+        for b in new_brands
+    ]
     shown = len(top_existing) + len(top_new)
 
     context = {
@@ -185,11 +196,19 @@ def render_email(
         "stats": [
             {"value": f"{data.open_deal_count:,}", "label": "Open deals", "colour": INK},
             {"value": compact_gbp(data.weighted_gbp), "label": "Weighted", "colour": ACCENT_PINK},
-            {"value": f"{data.new_brand_count:,}", "label": "New brands", "colour": INK},
+            {
+                "value": percent(data.new_business_share),
+                "label": "New business",
+                "colour": INK,
+            },
         ],
         "brand_columns": [
             {"heading": "Top 10 clients", "brands": top_existing},
-            {"heading": "Top 10 new business", "brands": top_new},
+            {
+                "heading": "New this fortnight",
+                "brands": top_new,
+                "empty_note": "No new brands entered the pipeline since the last update.",
+            },
         ],
         "remaining_brands": max(0, len(data.brands) - shown),
         "leaderboard": {

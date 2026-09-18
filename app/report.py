@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from . import email_html, excel, fx, mailer, team_directory
+from . import brand_history, email_html, excel, fx, mailer, team_directory
 from .config import Settings
 from .model import ReportData, build_report
 from .pipedrive import PipedriveClient
@@ -45,6 +45,7 @@ def collect(settings: Settings, report_date: date | None = None) -> ReportData:
     directory = team_directory.load_directory(
         settings.supabase_url, settings.supabase_key, report_date
     )
+    history = brand_history.load_history(settings.supabase_url, settings.supabase_key)
 
     with PipedriveClient(settings.pipedrive_api_token, settings.pipedrive_base_url) as client:
         pipeline_id = settings.pipedrive_pipeline_id
@@ -65,6 +66,7 @@ def collect(settings: Settings, report_date: date | None = None) -> ReportData:
             won_org_ids=client.won_deal_org_ids(org_ids),
             field_keys=client.field_keys(settings.field_overrides()),
             directory=directory,
+            history=history,
         )
 
 
@@ -137,6 +139,34 @@ def send(settings: Settings, artefacts: Artefacts) -> str:
     )
 
 
+def _record_brands(settings: Settings, data: ReportData) -> int | None:
+    """Mark this report's brands as announced.
+
+    Only after a live send: a test send must never burn a brand John has not
+    actually seen. A failure here is logged, not raised - the email has gone.
+    """
+    if settings.test_mode:
+        return None
+    try:
+        with brand_history.BrandHistoryStore(settings.supabase_url, settings.supabase_key) as store:
+            return store.record(data.brand_records(), data.report_date)
+    except Exception as exc:  # noqa: BLE001
+        log.error("Could not record reported brands (%s); they may be announced again", exc)
+        return None
+
+
+def seed_brand_history(settings: Settings) -> dict:
+    """Mark everything currently in the pipeline as already announced.
+
+    Run once before going live, otherwise the first real email presents every
+    existing new-business brand as fresh news.
+    """
+    data = collect(settings)
+    with brand_history.BrandHistoryStore(settings.supabase_url, settings.supabase_key) as store:
+        inserted = store.record(data.brand_records(), data.report_date)
+    return {"brands_in_pipeline": len(data.brands), "newly_recorded": inserted}
+
+
 def run(settings: Settings, *, dry_run: bool = False) -> dict:
     """Full cycle. Returns a small summary for logs and the HTTP response."""
     data = collect(settings)
@@ -150,6 +180,9 @@ def run(settings: Settings, *, dry_run: bool = False) -> dict:
         "rates": data.rates,
         "rates_are_live": data.rates_are_live,
         "team_directory_loaded": data.directory.loaded,
+        "brand_history_loaded": data.history.loaded,
+        "new_this_report": [b.name for b in data.brands_new_this_report],
+        "new_business_share": round(data.new_business_share, 4),
         "test_mode": artefacts.test_mode,
         "to": artefacts.to,
         "cc": artefacts.cc,
@@ -161,5 +194,6 @@ def run(settings: Settings, *, dry_run: bool = False) -> dict:
         return summary
     summary["message_id"] = send(settings, artefacts)
     summary["sent"] = True
+    summary["recorded_brands"] = _record_brands(settings, data)
     log.info("Report sent: %s", summary)
     return summary

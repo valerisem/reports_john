@@ -164,6 +164,34 @@ def preview_brands() -> JSONResponse:
     )
 
 
+@app.post("/seed-brand-history", dependencies=[Depends(require_admin)])
+def seed_brand_history() -> dict:
+    """Mark every brand currently in the pipeline as already announced.
+
+    Run once before the first live send, or John's first email presents the
+    whole existing pipeline as new business.
+    """
+    return report.seed_brand_history(get_settings())
+
+
+@app.get("/preview/new-brands", dependencies=[Depends(require_admin)])
+def preview_new_brands() -> JSONResponse:
+    """What the email would flag as new, without sending or recording it."""
+    settings = get_settings()
+    data = report.collect(settings)
+    return JSONResponse(
+        {
+            "brand_history_loaded": data.history.loaded,
+            "brands_already_reported": len(data.history.reported_keys),
+            "new_business_share": round(data.new_business_share, 4),
+            "new_this_report": [
+                {"brand": b.name, "key": b.brand_key, "weighted_gbp": round(b.weighted_gbp)}
+                for b in data.brands_new_this_report
+            ],
+        }
+    )
+
+
 @app.post("/run", dependencies=[Depends(require_admin)])
 def run_now(dry_run: bool = Query(default=False, description="Build everything but do not send")) -> dict:
     """Build and send the report immediately, honouring TEST_MODE."""

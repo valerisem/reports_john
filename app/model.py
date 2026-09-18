@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any, Iterable
 
+from .brand_history import BrandHistory
+from .brands import Brand, resolve_brands
 from .team_directory import TeamDirectory
 
 # Pipedrive stage name -> the friendlier label used in the newsletter.
@@ -67,6 +69,10 @@ class BrandRow:
     account_owner: str
     account_manager: str
     contacts: list[str] = field(default_factory=list)
+    brand_key: str = ""
+    org_ids: list[int] = field(default_factory=list)
+    is_duplicated: bool = False
+    is_new_this_report: bool = False
 
 
 @dataclass
@@ -81,6 +87,7 @@ class ReportData:
     account_managers: list[str]
     industries: list[str]
     directory: TeamDirectory = field(default_factory=TeamDirectory)
+    history: BrandHistory = field(default_factory=BrandHistory)
 
     # -- headline numbers --------------------------------------------------
     @property
@@ -102,6 +109,32 @@ class ReportData:
     @property
     def new_brand_count(self) -> int:
         return sum(1 for brand in self.brands if brand.client_status == NEW_BUSINESS)
+
+    @property
+    def new_business_share(self) -> float:
+        """New business as a share of total pipeline value, 0..1."""
+        total = self.pipeline_gbp
+        return (self.new_business_gbp / total) if total else 0.0
+
+    @property
+    def brands_new_this_report(self) -> list[BrandRow]:
+        """Brands never included in a previous report, biggest first."""
+        pool = [b for b in self.brands if b.is_new_this_report]
+        pool.sort(key=lambda b: (-b.weighted_gbp, b.name.lower()))
+        return pool
+
+    def brand_records(self) -> list[dict]:
+        """Rows for the history store, so these are not announced again."""
+        return [
+            {
+                "brand_key": b.brand_key,
+                "brand_name": b.name,
+                "status": b.client_status,
+                "org_ids": b.org_ids,
+            }
+            for b in self.brands
+            if b.brand_key
+        ]
 
     # -- breakdowns --------------------------------------------------------
     def by_stage(self) -> list[dict[str, Any]]:
@@ -285,8 +318,18 @@ def build_report(
     won_org_ids: set[int],
     field_keys: dict[str, str | None],
     directory: TeamDirectory | None = None,
+    brands_by_org: dict[int, Brand] | None = None,
+    history: BrandHistory | None = None,
 ) -> ReportData:
     directory = directory or TeamDirectory()
+    history = history or BrandHistory()
+    # Duplicate organisation records split a brand's won history from its live
+    # pipeline, so resolve organisations to brands before anything is counted.
+    if brands_by_org is None:
+        # Won history is pooled across the cluster, so a brand whose past deals
+        # sit on one record and whose open deal sits on another still reads as
+        # an existing client.
+        brands_by_org = resolve_brands(orgs, {org_id: 1 for org_id in won_org_ids})
     stages = sorted(
         (
             Stage(
@@ -307,8 +350,10 @@ def build_report(
 
     deal_rows: list[DealRow] = []
     for deal in deals_payload:
-        org = orgs.get(deal.get("org_id")) or {}
-        brand = _text(org.get("name"), default="")
+        org_id = deal.get("org_id")
+        org = orgs.get(org_id) or {}
+        resolved = brands_by_org.get(org_id)
+        brand = _text(resolved.name if resolved else org.get("name"), default="")
         if not brand:
             continue  # a deal with no organisation has no brand to report on
 
@@ -345,7 +390,11 @@ def build_report(
                 title=_text(deal.get("title"), default=""),
                 account_owner=account_owner,
                 account_manager=account_manager,
-                client_status=EXISTING if deal.get("org_id") in won_org_ids else NEW_BUSINESS,
+                client_status=(
+                    EXISTING
+                    if (resolved.is_existing_client if resolved else org_id in won_org_ids)
+                    else NEW_BUSINESS
+                ),
                 stage=stage.name,
                 stage_order=stage.order,
                 value=value,
@@ -367,30 +416,36 @@ def build_report(
     deal_rows.sort(key=lambda d: (-d.stage_order, -d.value_gbp, d.brand.lower()))
 
     # -- brand roll-up -----------------------------------------------------
+    # One row per resolved brand, so duplicate organisation records collapse
+    # into a single line rather than appearing twice with split figures.
     brands: list[BrandRow] = []
-    org_by_name: dict[str, dict] = {}
-    for org in orgs.values():
-        name = _text(org.get("name"), default="")
-        if name:
-            org_by_name.setdefault(name, org)
+    deals_by_brand: dict[str, list[DealRow]] = {}
+    for deal in deal_rows:
+        deals_by_brand.setdefault(deal.brand, []).append(deal)
 
-    for name, org in org_by_name.items():
-        brand_deals = [d for d in deal_rows if d.brand == name]
-        if not brand_deals:
-            continue
+    brand_by_name: dict[str, Brand] = {}
+    for brand in brands_by_org.values():
+        brand_by_name.setdefault(brand.name, brand)
+
+    for name, brand_deals in deals_by_brand.items():
+        resolved = brand_by_name.get(name)
+        org_ids = resolved.org_ids if resolved else []
         top_deal = max(brand_deals, key=lambda d: (d.stage_order, d.value_gbp))
+        # Contacts come from every organisation record behind the brand.
         contacts = [
             _text(person.get("name"), default="")
-            for person in org_contacts.get(org.get("id"), [])
+            for org_id in (org_ids or [None])
+            for person in org_contacts.get(org_id, [])
             if _text(person.get("name"), default="")
         ]
+        brand_key = resolved.key if resolved else ""
         brands.append(
             BrandRow(
                 name=name,
                 client_status=brand_deals[0].client_status,
-                industry=brand_deals[0].industry,
-                sub_industry=brand_deals[0].sub_industry,
-                website=brand_deals[0].website,
+                industry=next((d.industry for d in brand_deals if d.industry), ""),
+                sub_industry=next((d.sub_industry for d in brand_deals if d.sub_industry), ""),
+                website=next((d.website for d in brand_deals if d.website), ""),
                 open_deals=len(brand_deals),
                 pipeline_gbp=sum(d.value_gbp for d in brand_deals),
                 weighted_gbp=sum(d.weighted_gbp for d in brand_deals),
@@ -398,6 +453,16 @@ def build_report(
                 account_owner=top_deal.account_owner,
                 account_manager=top_deal.account_manager,
                 contacts=sorted(set(contacts), key=str.lower),
+                brand_key=brand_key,
+                org_ids=list(org_ids),
+                is_duplicated=bool(resolved and resolved.is_duplicated),
+                # Only genuinely new business counts as new to John; a returning
+                # client is not news even the first time it is reported.
+                is_new_this_report=(
+                    brand_deals[0].client_status == NEW_BUSINESS
+                    and bool(brand_key)
+                    and history.is_new(brand_key)
+                ),
             )
         )
     brands.sort(key=lambda b: (-b.pipeline_gbp, b.name.lower()))

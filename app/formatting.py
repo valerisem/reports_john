@@ -34,6 +34,16 @@ def first_name(full_name: str) -> str:
     return (full_name or "").strip().split(" ")[0] or full_name
 
 
+def percent(value: float) -> str:
+    """0.512 -> '51%'. Never 0% or 100% unless it truly is."""
+    pct = float(value or 0) * 100
+    if 0 < pct < 1:
+        return "<1%"
+    if 99 < pct < 100:
+        return ">99%"
+    return f"{round(pct)}%"
+
+
 def website_url(website: str) -> str:
     website = (website or "").strip()
     if not website:
