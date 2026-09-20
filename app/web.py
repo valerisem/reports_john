@@ -143,7 +143,14 @@ def preview_brands() -> JSONResponse:
     settings = get_settings()
     with PipedriveClient(settings.pipedrive_api_token, settings.pipedrive_base_url) as client:
         orgs = {org["id"]: org for org in client.all_organizations()}
-    by_org = resolve_brands(orgs)
+        # Same website key the report uses, or this reports clustering that
+        # cannot see domains and disagrees with the sheet.
+        website_key = client.field_keys(settings.field_overrides()).get("org_website")
+    by_org = resolve_brands(
+        orgs,
+        {org_id: 1 for org_id, org in orgs.items() if (org.get("won_deals_count") or 0) > 0},
+        website_key=website_key,
+    )
 
     brands = {id(b): b for b in by_org.values()}.values()
     duplicated = sorted(
@@ -152,6 +159,7 @@ def preview_brands() -> JSONResponse:
     return JSONResponse(
         {
             "organisations": len(orgs),
+            "website_field": website_key,
             "brands": len(brands),
             "duplicated_brands": len(duplicated),
             "clusters": [

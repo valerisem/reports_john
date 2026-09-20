@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     pipedrive_field_account_manager: str = ""
     pipedrive_field_industry: str = ""
     pipedrive_field_sub_industry: str = ""
+    pipedrive_field_org_website: str = ""
 
     # --- Supabase (team directory: pods, owners, account managers) ---------
     supabase_url: str = "https://tciqyupqtpbhremuprxe.supabase.co"
@@ -155,6 +156,7 @@ class Settings(BaseSettings):
             "deal_account_manager": self.pipedrive_field_account_manager,
             "org_industry": self.pipedrive_field_industry,
             "org_sub_industry": self.pipedrive_field_sub_industry,
+            "org_website": self.pipedrive_field_org_website,
         }
 
     @property
