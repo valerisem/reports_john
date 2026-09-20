@@ -41,6 +41,9 @@ ORG_SUB_INDUSTRY_LABELS = ("narrow niche", "sub-industry", "sub industry", "subi
 # Pipedrive ships a built-in "Website" that this account leaves empty and a
 # custom one that holds the real URL, exactly as it does for "Industry".
 ORG_WEBSITE_LABELS = ("website", "web site", "url", "company website")
+# The delivery window a deal is sold against - John's "over what period?".
+DEAL_START_LABELS = ("preferred start date", "campaign start date", "start date")
+DEAL_END_LABELS = ("preferred end date", "campaign end date", "end date")
 
 # Custom fields have a 40-character hex key; built-ins have readable ones.
 CUSTOM_KEY = re.compile(r"^[0-9a-f]{40}$")
@@ -323,5 +326,13 @@ class PipedriveClient:
             "org_website": self._field_key(
                 "/v1/organizationFields", ORG_WEBSITE_LABELS,
                 overrides.get("org_website", ""),
+            ),
+            "deal_campaign_start": self._field_key(
+                "/v1/dealFields", DEAL_START_LABELS,
+                overrides.get("deal_campaign_start", ""),
+            ),
+            "deal_campaign_end": self._field_key(
+                "/v1/dealFields", DEAL_END_LABELS,
+                overrides.get("deal_campaign_end", ""),
             ),
         }

@@ -338,7 +338,9 @@ def _build_brands(ws: Worksheet, data: ReportData, deal_last: int, last_row: int
             "I": brand.account_owner,
             "J": brand.account_manager,
             "K": ", ".join(brand.contacts),
-            "L": brand.finance.campaigns if brand.finance else "",
+            # Blank, not zero: a brand with nothing delivered has no margin to
+            # report, and a 0 reads as "we made nothing on them".
+            "L": brand.finance.campaigns if (brand.finance and brand.finance.campaigns) else "",
             "M": round(brand.finance.revenue_gbp, 2) if brand.finance and brand.finance.campaigns else "",
             "N": round(brand.finance.gross_profit_gbp, 2) if brand.finance and brand.finance.campaigns else "",
             "O": brand.margin if brand.margin is not None else "",
@@ -554,7 +556,27 @@ def _build_summary(ws: Worksheet, data: ReportData, deal_last: int) -> None:
         formats={"I": "General", "J": GBP, "K": GBP},
     )
 
-    charts_row = max(manager_total, industry_total) + 2
+    # Block 3 - what actually landed this financial year, beside the pipeline
+    # blocks above it. John asked for actuals, not only forecast.
+    ytd_total = max(manager_total, industry_total)
+    ytd_rows = [row for row in data.ytd_by_owner() if row["deals"]]
+    if ytd_rows:
+        header3 = ytd_total + 3
+        since = (
+            data.financial_year_start.strftime("%-d %B %Y")
+            if data.financial_year_start else ""
+        )
+        ytd_total = _table(
+            ws,
+            title=f"Won year to date{f' (since {since})' if since else ''}",
+            title_cell=f"B{header3 - 1}",
+            columns=[("B", "Account Owner"), ("C", "Deals won"), ("D", "Won value (£)")],
+            rows=[[row["name"], row["deals"], round(row["value_gbp"], 2)] for row in ytd_rows],
+            header_row=header3, tint=ROW_TINT, total_label="Total",
+            formats={"C": "General", "D": GBP},
+        )
+
+    charts_row = max(manager_total, industry_total, ytd_total) + 2
     ws[f"B{charts_row}"] = "Charts"
     ws[f"B{charts_row}"].font = _font(size=13, bold=True, color=INDIGO)
     ws.row_dimensions[charts_row].height = TITLE_ROW_HEIGHT

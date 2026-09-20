@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     pipedrive_field_industry: str = ""
     pipedrive_field_sub_industry: str = ""
     pipedrive_field_org_website: str = ""
+    pipedrive_field_campaign_start: str = ""
+    pipedrive_field_campaign_end: str = ""
 
     # --- Supabase (team directory: pods, owners, account managers) ---------
     supabase_url: str = "https://tciqyupqtpbhremuprxe.supabase.co"
@@ -160,6 +162,8 @@ class Settings(BaseSettings):
             "org_industry": self.pipedrive_field_industry,
             "org_sub_industry": self.pipedrive_field_sub_industry,
             "org_website": self.pipedrive_field_org_website,
+            "deal_campaign_start": self.pipedrive_field_campaign_start,
+            "deal_campaign_end": self.pipedrive_field_campaign_end,
         }
 
     @property

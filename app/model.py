@@ -56,6 +56,9 @@ class DealRow:
     industry: str
     sub_industry: str
     website: str
+    # The delivery window the deal is sold against, when Pipedrive holds it.
+    campaign_start: date | None = None
+    campaign_end: date | None = None
     # True when no organisation was linked in Pipedrive and the brand name had
     # to be read off the deal title instead.
     brand_from_title: bool = False
@@ -450,6 +453,8 @@ def build_report(
     stage_meta = {stage.name: stage for stage in stages}
 
     am_key = field_keys.get("deal_account_manager")
+    start_key = field_keys.get("deal_campaign_start")
+    end_key = field_keys.get("deal_campaign_end")
     industry_key = field_keys.get("org_industry")
     sub_industry_key = field_keys.get("org_sub_industry")
 
@@ -535,6 +540,8 @@ def build_report(
                 industry=_text(_custom(org, industry_key), default=""),
                 sub_industry=_text(_custom(org, sub_industry_key), default=""),
                 website=_text(org_website(org, field_keys.get("org_website")), default=""),
+                campaign_start=_as_date(_custom(deal, start_key)),
+                campaign_end=_as_date(_custom(deal, end_key)),
                 brand_from_title=brand_from_title,
             )
         )
