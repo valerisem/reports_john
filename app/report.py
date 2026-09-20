@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from . import brand_history, email_html, excel, fx, mailer, team_directory
+from . import brand_history, campaign_finance, email_html, excel, fx, mailer, team_directory
 from .config import Settings
 from .model import ReportData, build_report
 from .pipedrive import PipedriveClient
@@ -46,6 +46,11 @@ def collect(settings: Settings, report_date: date | None = None) -> ReportData:
         settings.supabase_url, settings.supabase_key, report_date
     )
     history = brand_history.load_history(settings.supabase_url, settings.supabase_key)
+    finance = (
+        campaign_finance.load_campaign_finance(settings.supabase_url, settings.supabase_key)
+        if settings.show_profitability
+        else campaign_finance.CampaignFinanceSet()
+    )
 
     with PipedriveClient(settings.pipedrive_api_token, settings.pipedrive_base_url) as client:
         pipeline_id = settings.pipedrive_pipeline_id
@@ -62,6 +67,11 @@ def collect(settings: Settings, report_date: date | None = None) -> ReportData:
             if (org.get("won_deals_count") or 0) > 0
         }
 
+        # Campaign history reaches back past the open pipeline, so the deals
+        # behind it are looked up by id rather than swept by status.
+        campaign_deal_orgs = (
+            client.deal_orgs(set(finance.by_deal)) if finance.loaded else {}
+        )
         fy_start = settings.financial_year_start(report_date)
         won_payload = client.won_deals(fy_start, pipeline_id) if settings.show_ytd else []
 
@@ -81,6 +91,8 @@ def collect(settings: Settings, report_date: date | None = None) -> ReportData:
             history=history,
             won_deals_payload=won_payload,
             financial_year_start=fy_start,
+            finance=finance,
+            campaign_deal_orgs=campaign_deal_orgs,
         )
 
 

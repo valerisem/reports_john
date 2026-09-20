@@ -121,6 +121,8 @@ class Settings(BaseSettings):
     financial_year_start_month: int = 4
     # Show the won year-to-date chart in the email.
     show_ytd: bool = True
+    # Show delivered-campaign gross margin beside each brand.
+    show_profitability: bool = True
 
     # --- Web ---------------------------------------------------------------
     port: int = 8000

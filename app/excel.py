@@ -304,6 +304,11 @@ BRAND_COLUMNS = [
     ("I", "Account Owner", 18),
     ("J", "Account Manager", 20),
     ("K", "Contacts", 40),
+    # Delivered campaigns only, from Supabase: what the work actually earned.
+    ("L", "Delivered campaigns", 18),
+    ("M", "Delivered revenue (£)", 18),
+    ("N", "Gross profit (£)", 16),
+    ("O", "Gross margin", 13),
 ]
 
 
@@ -332,14 +337,22 @@ def _build_brands(ws: Worksheet, data: ReportData, deal_last: int, last_row: int
             "I": brand.account_owner,
             "J": brand.account_manager,
             "K": ", ".join(brand.contacts),
+            "L": brand.finance.campaigns if brand.finance else "",
+            "M": round(brand.finance.revenue_gbp, 2) if brand.finance and brand.finance.campaigns else "",
+            "N": round(brand.finance.gross_profit_gbp, 2) if brand.finance and brand.finance.campaigns else "",
+            "O": brand.margin if brand.margin is not None else "",
         }
         for column, value in values.items():
             cell = ws[f"{column}{row}"]
             cell.value = value
             _style_body(
                 cell,
-                number_format=GBP if column == "G" else "General",
-                align="center" if column in {"B", "F"} else "general",
+                number_format=(
+                    GBP if column in {"G", "M", "N"}
+                    else "0%" if column == "O"
+                    else "General"
+                ),
+                align="center" if column in {"B", "F", "L", "O"} else "general",
                 bold=column == "A",
                 color=INDIGO if column == "A" else BLACK,
                 vertical="top",
@@ -349,7 +362,7 @@ def _build_brands(ws: Worksheet, data: ReportData, deal_last: int, last_row: int
             website.hyperlink = _as_url(brand.website)
             website.font = _font(color=PURPLE, underline="single")
 
-    ws.auto_filter.ref = f"A1:K{last_row}"
+    ws.auto_filter.ref = f"A1:O{last_row}"
     _apply_row_rules(ws, stage_column="H", status_column="B", weighted_column="G", last_row=last_row)
 
 

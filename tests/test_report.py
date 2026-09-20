@@ -140,6 +140,7 @@ def test_brands_headers_match_the_template(workbook):
     assert headers == [
         "Brand", "Client status", "Industry", "Sub-industry", "Website", "Open deals",
         "Pipeline (£)", "Furthest stage", "Account Owner", "Account Manager", "Contacts",
+        "Delivered campaigns", "Delivered revenue (£)", "Gross profit (£)", "Gross margin",
     ]
 
 
@@ -495,3 +496,90 @@ def test_financial_year_start_follows_the_configured_month():
     assert april.financial_year_start(_dt.date(2026, 3, 31)) == _dt.date(2025, 4, 1)
     calendar = Settings(pipedrive_api_token="x", financial_year_start_month=1)
     assert calendar.financial_year_start(_dt.date(2026, 9, 20)) == _dt.date(2026, 1, 1)
+
+
+# -- campaign profitability ------------------------------------------------
+from app.campaign_finance import CampaignFinanceSet, build_finance
+
+
+def test_bookings_prefixed_board_or_pay_are_ignored():
+    """Those rows are creators listed on a board, never paid - no fee at all."""
+    finance = build_finance(
+        [{"pd_deal_id": 5, "client_name": "X", "stage": "Delivered",
+          "budget_gbp": 100_000, "current_spend_gbp": 40_000}],
+        [{"campaign_number": "5", "fee_gbp": 30_000},
+         {"campaign_number": "board:99", "fee_gbp": None},
+         {"campaign_number": "pay:123", "fee_gbp": 5_000}],
+    )
+    campaign = finance.by_deal[5]
+    assert campaign.influencer_cost_gbp == 30_000
+    assert campaign.costed_from_payments is True
+
+
+def test_cost_falls_back_to_board_spend_when_no_payments_exist():
+    finance = build_finance(
+        [{"pd_deal_id": 7, "client_name": "X", "stage": "Delivered",
+          "budget_gbp": 50_000, "current_spend_gbp": 20_000}],
+        [],
+    )
+    assert finance.by_deal[7].influencer_cost_gbp == 20_000
+    assert finance.by_deal[7].costed_from_payments is False
+
+
+def test_margin_includes_paid_media_and_brand_uplift():
+    finance = build_finance(
+        [{"pd_deal_id": 1, "client_name": "X", "stage": "Delivered", "budget_gbp": 100_000,
+          "paid_media_spend": 10_000, "brand_uplift_spend": 5_000}],
+        [{"campaign_number": "1", "fee_gbp": 35_000}],
+    )
+    rolled = finance.roll_up({1})
+    assert rolled.cost_gbp == 50_000
+    assert rolled.gross_profit_gbp == 50_000
+    assert rolled.margin == pytest.approx(0.5)
+
+
+def test_campaigns_still_running_are_left_out_of_margin():
+    finance = build_finance(
+        [{"pd_deal_id": 1, "client_name": "X", "stage": "WIP",
+          "budget_gbp": 100_000, "current_spend_gbp": 1_000}],
+        [{"campaign_number": "1", "fee_gbp": 1_000}],
+    )
+    assert finance.roll_up({1}).margin is None
+
+
+def test_duplicate_client_records_total_as_one_brand():
+    """Opera, Opera Ltd and Opera Browser are one client, not three."""
+    finance = build_finance(
+        [{"pd_deal_id": 11, "client_name": "Opera", "stage": "Delivered", "budget_gbp": 100_000},
+         {"pd_deal_id": 12, "client_name": "Opera Ltd", "stage": "Delivered", "budget_gbp": 100_000},
+         {"pd_deal_id": 13, "client_name": "Opera Browser", "stage": "Delivered", "budget_gbp": 100_000}],
+        [{"campaign_number": "11", "fee_gbp": 70_000},
+         {"campaign_number": "12", "fee_gbp": 50_000},
+         {"campaign_number": "13", "fee_gbp": 30_000}],
+    )
+    # All three deals sit on organisations that resolve to a single brand.
+    rolled = finance.roll_up({11, 12, 13})
+    assert rolled.campaigns == 3
+    assert rolled.revenue_gbp == 300_000
+    assert rolled.margin == pytest.approx(0.5)
+
+
+def test_margin_is_none_without_finance_data(data):
+    assert all(brand.margin is None for brand in data.brands)
+
+
+def test_email_shows_margin_beside_the_value():
+    payload = fixture.load()
+    finance = build_finance(
+        [{"pd_deal_id": 1, "client_name": "X", "stage": "Delivered",
+          "budget_gbp": 100_000, "current_spend_gbp": 40_000}],
+        [{"campaign_number": "1", "fee_gbp": 40_000}],
+    )
+    orgs = payload["orgs"]
+    org_id = next(iter(orgs))
+    report = build_report(**payload, finance=finance, campaign_deal_orgs={1: org_id})
+    priced = [b for b in report.brands if b.margin is not None]
+    assert priced, "expected at least one brand to carry a margin"
+    assert priced[0].margin == pytest.approx(0.6)
+    html = render_email(report, title="t", greeting_name="John", sender_name="Valeria")
+    assert "#9a99a5" in html  # grey margin styling next to the black value

@@ -7,6 +7,7 @@ from datetime import date, datetime
 from typing import Any, Iterable
 
 from .brand_history import BrandHistory
+from .campaign_finance import BrandFinance, CampaignFinanceSet
 from .brands import Brand, is_placeholder, normalise_name, resolve_brands
 from .team_directory import TeamDirectory
 
@@ -77,6 +78,12 @@ class BrandRow:
     org_ids: list[int] = field(default_factory=list)
     is_duplicated: bool = False
     is_new_this_report: bool = False
+    finance: BrandFinance | None = None
+
+    @property
+    def margin(self) -> float | None:
+        """Gross margin on delivered campaigns, 0..1, or None if unmeasured."""
+        return self.finance.margin if self.finance else None
 
 
 @dataclass
@@ -394,9 +401,13 @@ def build_report(
     history: BrandHistory | None = None,
     won_deals_payload: list[dict] | None = None,
     financial_year_start: date | None = None,
+    finance: CampaignFinanceSet | None = None,
+    campaign_deal_orgs: dict[int, int] | None = None,
 ) -> ReportData:
     directory = directory or TeamDirectory()
     history = history or BrandHistory()
+    finance = finance or CampaignFinanceSet()
+    campaign_deal_orgs = campaign_deal_orgs or {}
     # Duplicate organisation records split a brand's won history from its live
     # pipeline, so resolve organisations to brands before anything is counted.
     if brands_by_org is None:
@@ -519,6 +530,16 @@ def build_report(
     for deal in deal_rows:
         deals_by_brand.setdefault(deal.brand, []).append(deal)
 
+    # Campaign history is keyed by Pipedrive deal; route each one through its
+    # organisation to the resolved brand, so "Opera", "Opera Ltd" and
+    # "Opera Browser" total as one client rather than three.
+    deal_ids_by_brand_key: dict[str, set[int]] = {}
+    for campaign_deal_id, campaign_org_id in campaign_deal_orgs.items():
+        resolved_brand = brands_by_org.get(campaign_org_id)
+        if resolved_brand is None or not resolved_brand.key:
+            continue
+        deal_ids_by_brand_key.setdefault(resolved_brand.key, set()).add(campaign_deal_id)
+
     brand_by_name: dict[str, Brand] = {}
     for brand in brands_by_org.values():
         brand_by_name.setdefault(brand.name, brand)
@@ -558,6 +579,10 @@ def build_report(
                     brand_deals[0].client_status == NEW_BUSINESS
                     and bool(brand_key)
                     and history.is_new(brand_key)
+                ),
+                finance=(
+                    finance.roll_up(deal_ids_by_brand_key.get(brand_key, set()))
+                    if brand_key and finance.loaded else None
                 ),
             )
         )

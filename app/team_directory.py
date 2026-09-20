@@ -130,6 +130,17 @@ class SupabaseClient:
             )
         return response.json()
 
+    def rows_range(self, table: str, select: str, offset: int, limit: int) -> list[dict]:
+        """One page of a table too large to read in a single response."""
+        response = self._client.get(
+            f"/{table}", params={"select": select, "limit": limit, "offset": offset}
+        )
+        if response.status_code >= 400:
+            raise TeamDirectoryError(
+                f"GET {table} -> {response.status_code}: {response.text[:300]}"
+            )
+        return response.json()
+
 
 def build_directory(
     *,

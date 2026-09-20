@@ -54,6 +54,7 @@ def _brand_entries(data: ReportData, status: str, with_poc: bool) -> list[dict]:
                 "name": brand.name,
                 "url": website_url(brand.website),
                 "value": compact_gbp(brand.weighted_gbp),
+                "margin": percent(brand.margin) if brand.margin is not None else "",
                 "poc": brand.contacts[0] if (with_poc and brand.contacts) else "",
             }
         )
@@ -192,6 +193,7 @@ def render_email(
     # not re-announced week after week. Often this is empty.
     def entry(brand) -> dict:
         return {
+            "margin": percent(brand.margin) if brand.margin is not None else "",
             "name": brand.name,
             "url": website_url(brand.website),
             "value": compact_gbp(brand.weighted_gbp),

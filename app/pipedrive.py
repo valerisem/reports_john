@@ -139,6 +139,30 @@ class PipedriveClient:
                     seen[deal["id"]] = deal
         return list(seen.values())
 
+    def deal_orgs(self, deal_ids: set[int]) -> dict[int, int]:
+        """deal id -> organisation id, for deals of any status.
+
+        Campaign history in Supabase is keyed by Pipedrive deal, so this is
+        what turns a campaign into a brand. Fetching by id reaches won, lost
+        and archived deals alike, which a status sweep would not.
+        """
+        mapping: dict[int, int] = {}
+        ordered = sorted(deal_ids)
+        for i in range(0, len(ordered), 100):
+            batch = ordered[i : i + 100]
+            try:
+                payload = self._get(
+                    "/api/v2/deals",
+                    {"ids": ",".join(str(x) for x in batch), "limit": 500},
+                )
+            except PipedriveError as exc:
+                log.warning("Deal batch could not be fetched for profitability: %s", exc)
+                continue
+            for deal in payload.get("data") or []:
+                if deal.get("org_id"):
+                    mapping[deal["id"]] = deal["org_id"]
+        return mapping
+
     def won_deal_org_ids(self, org_ids: set[int]) -> set[int]:
         """Orgs with at least one won deal -> 'Existing client'.
 
