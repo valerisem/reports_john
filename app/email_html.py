@@ -37,6 +37,8 @@ PLACE_FILLS = [
 ]
 PODIUM_MIN_PX = 78
 PODIUM_RANGE_PX = 94
+MGR_MIN_PX = 16
+MGR_RANGE_PX = 44
 
 _env = Environment(
     loader=FileSystemLoader(str(TEMPLATE_DIR)),
@@ -82,41 +84,82 @@ def _bar_rows(rows: list[dict], label_key: str, value_key: str, *,
     ]
 
 
-def _leaderboard(owner_rows: list[dict], photo_template: str) -> list[dict]:
-    """Account owners ranked by weighted value, laid out 2nd - 1st - 3rd.
+def _photo(name: str, template: str) -> str:
+    """The cut-out head for a person, named after their first name.
 
-    Column height is proportional to weighted value, so the podium moves on
-    its own each week. Only the top three place, which is what the layout has
-    room for.
+    'Emma-Leigh Pedder' resolves to emma.png: the bucket is keyed on the plain
+    first name, so anything after a hyphen is dropped.
+    """
+    if not template:
+        return ""
+    slug = first_name(name).split("-")[0].lower()
+    return template.format(name=slug)
+
+
+def _leaderboard(owner_rows: list[dict], pod_rows: list[dict],
+                 photo_template: str) -> list[dict]:
+    """The three pods, best first, each with the managers inside it.
+
+    The pod total is every deal the lead owns; a manager's figure is the slice
+    of that same pipeline they manage, so the managers never sum to the total.
+    What is left is the lead's own, shown as 'self-managed' - together they do
+    account for the whole pod.
+
+    Column height is proportional to the pod total and manager bars are scaled
+    against the largest manager anywhere, so the small bars compare managers to
+    each other rather than to the column above them.
     """
     ranked = sorted(owner_rows, key=lambda r: -r["weighted_gbp"])[:3]
     if not ranked:
         return []
     top = ranked[0]["weighted_gbp"] or 1
+
+    managers_by_owner: dict[str, list[dict]] = {}
+    for row in pod_rows:
+        if row["manager"]:
+            managers_by_owner.setdefault(row["owner"], []).append(row)
+    am_top = max(
+        (r["weighted_gbp"] for rows in managers_by_owner.values() for r in rows),
+        default=0,
+    ) or 1
+
     entries = []
     for place, row in enumerate(ranked):
         fill, numeral = PLACE_FILLS[min(place, len(PLACE_FILLS) - 1)]
-        name = first_name(row["name"])
+        mine = sorted(
+            managers_by_owner.get(row["name"], []),
+            key=lambda r: -r["weighted_gbp"],
+        )
+        direct = row["weighted_gbp"] - sum(r["weighted_gbp"] for r in mine)
         entries.append(
             {
-                "name": name,
+                "name": first_name(row["name"]),
+                "owner": row["name"],
                 "rank": place + 1,
-                "value": compact_gbp(row["weighted_gbp"]),
+                "total": compact_gbp(row["weighted_gbp"]),
                 "deals": row["deals"],
+                "direct": compact_gbp(direct),
+                "direct_percent": round(direct / (row["weighted_gbp"] or 1) * 100),
                 "colour": fill,
                 "numeral_colour": numeral,
                 "height": round(
                     PODIUM_MIN_PX + (row["weighted_gbp"] / top) * PODIUM_RANGE_PX
                 ),
-                "photo": photo_template.format(name=name.lower())
-                if photo_template
-                else "",
-                "owner": row["name"],
+                "photo": _photo(row["name"], photo_template),
+                "managers": [
+                    {
+                        "name": first_name(r["manager"]),
+                        "value": compact_gbp(r["weighted_gbp"]),
+                        "height": round(
+                            MGR_MIN_PX + (r["weighted_gbp"] / am_top) * MGR_RANGE_PX
+                        ),
+                        "photo": _photo(r["manager"], photo_template),
+                    }
+                    for r in mine
+                ],
             }
         )
-    # 2nd on the left, the winner in the middle, 3rd on the right
-    order = [1, 0, 2]
-    return [entries[i] for i in order if i < len(entries)]
+    return entries
 
 
 def _stage_segments(stage: str, total: float, percent: int,
@@ -168,7 +211,7 @@ def render_email(
     stage_rows = [row for row in data.by_stage() if row["deals"]]
     owner_rows = [row for row in data.by_owner() if row["deals"]]
 
-    leaderboard = _leaderboard(owner_rows, owner_photo_url_template)
+    leaderboard = _leaderboard(owner_rows, data.by_pod(), owner_photo_url_template)
     split = data.by_stage_owner()
     stage_bars = _bar_rows(stage_rows, "label", "value_gbp", max_fill=94)
     for bar, row in zip(stage_bars, stage_rows):

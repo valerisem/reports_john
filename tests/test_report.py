@@ -240,23 +240,43 @@ def test_stage_owner_split_adds_up_to_each_stage_total(data):
         assert sum(split[row["stage"]].values()) == pytest.approx(row["value_gbp"])
 
 
-def test_leaderboard_runs_second_first_third(data):
-    entries = _leaderboard(data.by_owner(), "https://example.test/art/{name}.png")
-    assert [e["rank"] for e in entries] == [2, 1, 3]
-    assert entries[1]["name"] == "Valeriia"
-    # the tallest column belongs to the winner
-    assert entries[1]["height"] == max(e["height"] for e in entries)
+def test_leaderboard_runs_winner_first(data):
+    entries = _leaderboard(data.by_owner(), data.by_pod(), "https://example.test/{name}.png")
+    assert [e["rank"] for e in entries] == [1, 2, 3]
+    assert entries[0]["name"] == "Valeriia"
+    # the tallest column belongs to the winner, and the order matches the bars
+    assert entries[0]["height"] == max(e["height"] for e in entries)
 
 
-def test_leaderboard_names_each_owner_photo_after_their_first_name(data):
-    entries = _leaderboard(data.by_owner(), "https://example.test/art/{name}.png")
-    assert entries[1]["photo"] == "https://example.test/art/valeriia.png"
+def test_pod_splits_into_managers_plus_the_leads_own_share(data):
+    entries = _leaderboard(data.by_owner(), data.by_pod(), "")
+    pods = {r["owner"]: r for r in data.by_pod() if r["manager"] is None}
+    for entry in entries:
+        managed = sum(
+            r["weighted_gbp"] for r in data.by_pod()
+            if r["owner"] == entry["owner"] and r["manager"]
+        )
+        total = pods[entry["owner"]]["weighted_gbp"]
+        # what the lead handles plus what their managers handle is the whole pod
+        assert compact_gbp(total - managed) == entry["direct"]
+        assert entry["direct_percent"] == round((total - managed) / total * 100)
+
+
+def test_photos_are_named_after_plain_first_names(data):
+    entries = _leaderboard(data.by_owner(), data.by_pod(), "https://example.test/{name}.png")
+    assert entries[0]["photo"] == "https://example.test/valeriia.png"
     assert all(e["photo"] for e in entries)
-    assert all(e["photo"] == "" for e in _leaderboard(data.by_owner(), ""))
+    # a hyphenated first name still resolves to the plain one: emma.png
+    managers = [m for e in entries for m in e["managers"]]
+    assert managers, "the reference data should place managers inside pods"
+    assert all(m["photo"].endswith(".png") for m in managers)
+    assert all("-" not in m["photo"].rsplit("/", 1)[-1] for m in managers)
+    blank = _leaderboard(data.by_owner(), data.by_pod(), "")
+    assert all(e["photo"] == "" for e in blank)
 
 
 def test_stage_segments_keep_one_order_and_fill_the_bar(data):
-    entries = _leaderboard(data.by_owner(), "")
+    entries = _leaderboard(data.by_owner(), data.by_pod(), "")
     split = data.by_stage_owner()
     orders = []
     for row in data.by_stage():
@@ -275,6 +295,7 @@ def test_email_renders_the_leaderboard_ahead_of_the_stage_chart(data):
     assert html.index("Weighted Pipeline Leaderboard") < html.index("Pipeline by stage")
     assert "Weighted by account owner" not in html
     assert "/valeriia.png" in html
+    assert "self-managed" in html
 
 
 # -- brand identity in the report ------------------------------------------
