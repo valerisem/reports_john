@@ -8,11 +8,28 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import date, datetime
 from typing import Any, Iterator
 
 import httpx
 
 log = logging.getLogger(__name__)
+
+
+def _as_date(value: Any) -> date | None:
+    """Pipedrive returns dates as 'YYYY-MM-DD' or an ISO timestamp."""
+    if not value:
+        return None
+    text = str(value).strip().replace("Z", "+00:00")
+    try:
+        return datetime.fromisoformat(text).date()
+    except ValueError:
+        pass
+    try:
+        return date.fromisoformat(text[:10])
+    except ValueError:
+        return None
+
 
 # Field labels we look for in Pipedrive, most specific first.
 # Keep every entry a distinctive phrase: short aliases match far too much.
@@ -93,6 +110,34 @@ class PipedriveClient:
         if pipeline_id:
             params["pipeline_id"] = pipeline_id
         return list(self._paginate_v2("/api/v2/deals", params))
+
+    def won_deals(self, since: date, pipeline_id: int | None = None) -> list[dict]:
+        """Deals won on or after ``since``.
+
+        /api/v2/deals hides archived deals and Pipedrive archives old won ones,
+        so the archived set is fetched separately and merged; a year-to-date
+        total built from the default view alone reads low. Pipedrive has no
+        won_time filter, so the cut-off is applied here.
+        """
+        seen: dict[int, dict] = {}
+        for archived in (False, True):
+            params: dict[str, Any] = {"status": "won"}
+            if pipeline_id:
+                params["pipeline_id"] = pipeline_id
+            if archived:
+                params["is_archived"] = "true"
+            try:
+                page = list(self._paginate_v2("/api/v2/deals", params))
+            except PipedriveError:
+                if not archived:
+                    raise
+                log.warning("Archived won deals could not be fetched; totals may read low.")
+                continue
+            for deal in page:
+                won_on = _as_date(deal.get("won_time") or deal.get("local_won_date"))
+                if won_on and won_on >= since:
+                    seen[deal["id"]] = deal
+        return list(seen.values())
 
     def won_deal_org_ids(self, org_ids: set[int]) -> set[int]:
         """Orgs with at least one won deal -> 'Existing client'.

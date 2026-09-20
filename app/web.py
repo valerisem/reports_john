@@ -170,6 +170,29 @@ def preview_brands() -> JSONResponse:
     )
 
 
+@app.get("/preview/ytd", dependencies=[Depends(require_admin)])
+def preview_ytd() -> JSONResponse:
+    """Won year-to-date, for reconciling against Pipedrive's own Insights."""
+    settings = get_settings()
+    data = report.collect(settings)
+    return JSONResponse(
+        {
+            "financial_year_start": (
+                data.financial_year_start.isoformat() if data.financial_year_start else None
+            ),
+            "financial_year_start_month": settings.financial_year_start_month,
+            "won_deals": len(data.won_ytd),
+            "won_gbp": round(data.won_ytd_gbp),
+            "by_owner": data.ytd_by_owner(),
+            "biggest": [
+                {"brand": w.brand, "title": w.title, "owner": w.account_owner,
+                 "won_on": w.won_on.isoformat(), "value_gbp": round(w.value_gbp)}
+                for w in data.won_ytd[:15]
+            ],
+        }
+    )
+
+
 @app.post("/seed-brand-history", dependencies=[Depends(require_admin)])
 def seed_brand_history() -> dict:
     """Mark every brand currently in the pipeline as already announced.

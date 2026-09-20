@@ -416,3 +416,82 @@ def test_an_unlinked_deal_rejoins_a_brand_it_names_exactly(data):
 def test_an_unlinked_deal_with_no_usable_title_is_dropped(data):
     report = build_report(**_payload_with_unlinked_deal(""))
     assert report.open_deal_count == data.open_deal_count
+
+
+# -- won year to date ------------------------------------------------------
+import datetime as _dt
+
+from app.config import Settings
+
+
+def _won_payload(owner_ids: list[int]) -> list[dict]:
+    won = []
+    for i, oid in enumerate(owner_ids):
+        won.append({
+            "id": 900_000 + i, "title": f"Won deal {i}", "org_id": None, "owner_id": oid,
+            "value": 50_000 * (i + 1), "currency": "GBP",
+            "won_time": f"2026-06-0{i + 1}T10:00:00Z",
+        })
+    return won
+
+
+def _ytd(data_payload: dict, won: list[dict]):
+    return build_report(**data_payload, won_deals_payload=won,
+                        financial_year_start=_dt.date(2026, 4, 1))
+
+
+def test_won_ytd_totals_and_owner_split():
+    payload = fixture.load()
+    owner_ids = list(payload["users"])[:3]
+    report = _ytd(payload, _won_payload(owner_ids))
+
+    assert len(report.won_ytd) == 3
+    assert round(report.won_ytd_gbp) == 50_000 + 100_000 + 150_000
+    rows = {r["name"]: r for r in report.ytd_by_owner()}
+    assert sum(r["deals"] for r in rows.values()) == 3
+    # Biggest first, and every pipeline owner is listed even on a blank year.
+    values = [r["value_gbp"] for r in report.ytd_by_owner()]
+    assert values == sorted(values, reverse=True)
+    assert set(report.account_owners) <= set(rows)
+
+
+def test_won_before_the_financial_year_is_excluded():
+    payload = fixture.load()
+    owner_id = list(payload["users"])[0]
+    won = _won_payload([owner_id]) + [{
+        "id": 1, "title": "Last year", "org_id": None, "owner_id": owner_id,
+        "value": 999_999, "currency": "GBP", "won_time": "2025-06-01T10:00:00Z",
+    }]
+    report = _ytd(payload, won)
+    assert len(report.won_ytd) == 1
+    assert round(report.won_ytd_gbp) == 50_000
+
+
+def test_won_ytd_is_converted_to_sterling():
+    payload = fixture.load()
+    owner_id = list(payload["users"])[0]
+    won = [{"id": 1, "title": "USD win", "org_id": None, "owner_id": owner_id,
+            "value": 100_000, "currency": "USD", "won_time": "2026-06-01T10:00:00Z"}]
+    report = _ytd(payload, won)
+    assert round(report.won_ytd_gbp) == round(100_000 * payload["rates"]["USD"])
+
+
+def test_email_hides_the_ytd_chart_when_nothing_is_won(data):
+    html = render_email(data, title="t", greeting_name="John", sender_name="Valeria")
+    assert "Won year to date" not in html
+
+
+def test_email_shows_the_ytd_chart_when_something_is_won():
+    payload = fixture.load()
+    report = _ytd(payload, _won_payload(list(payload["users"])[:2]))
+    html = render_email(report, title="t", greeting_name="John", sender_name="Valeria")
+    assert "Won year to date" in html
+    assert "Closed won deals since 1 April 2026." in html
+
+
+def test_financial_year_start_follows_the_configured_month():
+    april = Settings(pipedrive_api_token="x")
+    assert april.financial_year_start(_dt.date(2026, 9, 20)) == _dt.date(2026, 4, 1)
+    assert april.financial_year_start(_dt.date(2026, 3, 31)) == _dt.date(2025, 4, 1)
+    calendar = Settings(pipedrive_api_token="x", financial_year_start_month=1)
+    assert calendar.financial_year_start(_dt.date(2026, 9, 20)) == _dt.date(2026, 1, 1)

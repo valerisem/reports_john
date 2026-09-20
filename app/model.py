@@ -80,6 +80,16 @@ class BrandRow:
 
 
 @dataclass
+class WonRow:
+    """A deal won inside the reported financial year."""
+    brand: str
+    title: str
+    account_owner: str
+    won_on: date
+    value_gbp: float
+
+
+@dataclass
 class ReportData:
     report_date: date
     rates: dict[str, float]
@@ -92,6 +102,8 @@ class ReportData:
     industries: list[str]
     directory: TeamDirectory = field(default_factory=TeamDirectory)
     history: BrandHistory = field(default_factory=BrandHistory)
+    won_ytd: list[WonRow] = field(default_factory=list)
+    financial_year_start: date | None = None
 
     # -- headline numbers --------------------------------------------------
     @property
@@ -126,6 +138,28 @@ class ReportData:
         pool = [b for b in self.brands if b.is_new_this_report]
         pool.sort(key=lambda b: (-b.weighted_gbp, b.name.lower()))
         return pool
+
+    @property
+    def won_ytd_gbp(self) -> float:
+        return sum(w.value_gbp for w in self.won_ytd)
+
+    def ytd_by_owner(self) -> list[dict[str, Any]]:
+        """Won value so far this financial year, per account owner.
+
+        Owners are the same pod leads used for the pipeline, so the two charts
+        read against each other: what landed, next to what is still in play.
+        """
+        totals: dict[str, dict[str, Any]] = {}
+        for won in self.won_ytd:
+            row = totals.setdefault(won.account_owner, {"name": won.account_owner, "deals": 0, "value_gbp": 0.0})
+            row["deals"] += 1
+            row["value_gbp"] += won.value_gbp
+        # Everyone carrying pipeline appears even on a blank year, so a missing
+        # bar reads as "nothing won yet" rather than "left the company".
+        for owner in self.account_owners:
+            totals.setdefault(owner, {"name": owner, "deals": 0, "value_gbp": 0.0})
+        rows = sorted(totals.values(), key=lambda r: (-r["value_gbp"], r["name"].lower()))
+        return rows
 
     @property
     def deals_missing_organisation(self) -> list[DealRow]:
@@ -358,6 +392,8 @@ def build_report(
     directory: TeamDirectory | None = None,
     brands_by_org: dict[int, Brand] | None = None,
     history: BrandHistory | None = None,
+    won_deals_payload: list[dict] | None = None,
+    financial_year_start: date | None = None,
 ) -> ReportData:
     directory = directory or TeamDirectory()
     history = history or BrandHistory()
@@ -537,6 +573,35 @@ def build_report(
         if deal.industry:
             industry_totals[deal.industry] = industry_totals.get(deal.industry, 0.0) + deal.value_gbp
 
+    # -- won year to date --------------------------------------------------
+    # Same owner mapping as the pipeline, so the two charts compare like with
+    # like. A won deal whose organisation was deleted still counts: the money
+    # landed, whatever happened to the record afterwards.
+    won_rows: list[WonRow] = []
+    for deal in won_deals_payload or []:
+        won_on = _as_date(deal.get("won_time")) or _as_date(deal.get("local_won_date"))
+        if won_on is None or (financial_year_start and won_on < financial_year_start):
+            continue
+        currency = _text(deal.get("currency"), default="GBP").upper()
+        org_id = deal.get("org_id")
+        resolved = brands_by_org.get(org_id)
+        owner_id = deal.get("owner_id")
+        won_rows.append(
+            WonRow(
+                brand=_text(
+                    resolved.name if resolved else (orgs.get(org_id) or {}).get("name"),
+                    default=brand_from_deal_title(deal.get("title")),
+                ),
+                title=_text(deal.get("title"), default=""),
+                account_owner=directory.account_owner(
+                    owner_id, _text(users.get(owner_id), default=UNASSIGNED)
+                ),
+                won_on=won_on,
+                value_gbp=float(deal.get("value") or 0) * rates.get(currency, 1.0),
+            )
+        )
+    won_rows.sort(key=lambda w: (-w.value_gbp, w.brand.lower()))
+
     return ReportData(
         report_date=report_date,
         rates=rates,
@@ -549,4 +614,6 @@ def build_report(
         industries=_ordered_by_value(industry_totals),
         directory=directory,
         history=history,
+        won_ytd=won_rows,
+        financial_year_start=financial_year_start,
     )

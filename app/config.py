@@ -114,6 +114,14 @@ class Settings(BaseSettings):
     # ISO date of a week the report SHOULD go out; parity is measured from it.
     schedule_anchor_date: str = "2026-09-16"
 
+    # --- Year to date ------------------------------------------------------
+    # Month the financial year starts in, 1-12. House of Marketers' deal titles
+    # put Oct/Nov 2026 in "FY 27", which points at an April start; set
+    # FINANCIAL_YEAR_START_MONTH=1 for a calendar year.
+    financial_year_start_month: int = 4
+    # Show the won year-to-date chart in the email.
+    show_ytd: bool = True
+
     # --- Web ---------------------------------------------------------------
     port: int = 8000
     admin_token: str = ""
@@ -122,6 +130,14 @@ class Settings(BaseSettings):
     @classmethod
     def _parse_emails(cls, value):
         return _split_emails(value)
+
+    def financial_year_start(self, on: "date") -> "date":
+        """First day of the financial year that ``on`` falls in."""
+        from datetime import date as _date
+
+        month = min(12, max(1, self.financial_year_start_month))
+        year = on.year if (on.month, on.day) >= (month, 1) else on.year - 1
+        return _date(year, month, 1)
 
     @property
     def period_label(self) -> str:

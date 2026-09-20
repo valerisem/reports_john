@@ -62,6 +62,9 @@ def collect(settings: Settings, report_date: date | None = None) -> ReportData:
             if (org.get("won_deals_count") or 0) > 0
         }
 
+        fy_start = settings.financial_year_start(report_date)
+        won_payload = client.won_deals(fy_start, pipeline_id) if settings.show_ytd else []
+
         return build_report(
             report_date=report_date,
             rates=rates,
@@ -76,6 +79,8 @@ def collect(settings: Settings, report_date: date | None = None) -> ReportData:
             field_keys=client.field_keys(settings.field_overrides()),
             directory=directory,
             history=history,
+            won_deals_payload=won_payload,
+            financial_year_start=fy_start,
         )
 
 
