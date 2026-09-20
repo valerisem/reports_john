@@ -170,6 +170,32 @@ def preview_brands() -> JSONResponse:
     )
 
 
+@app.get("/preview/profitability", dependencies=[Depends(require_admin)])
+def preview_profitability() -> JSONResponse:
+    """Delivered-campaign margin per brand, plus what could not be matched."""
+    settings = get_settings()
+    data = report.collect(settings)
+    priced = [b for b in data.brands if b.margin is not None]
+    return JSONResponse(
+        {
+            "brands_with_margin": len(priced),
+            "brands_total": len(data.brands),
+            "campaigns_unmatched": data.campaigns_unmatched,
+            "brands": [
+                {
+                    "brand": b.name,
+                    "campaigns": b.finance.campaigns,
+                    "revenue_gbp": round(b.finance.revenue_gbp),
+                    "gross_profit_gbp": round(b.finance.gross_profit_gbp),
+                    "margin_pct": round(100 * b.margin),
+                    "costed_from_payments": b.finance.costed_from_payments,
+                }
+                for b in sorted(priced, key=lambda b: -b.finance.revenue_gbp)
+            ],
+        }
+    )
+
+
 @app.get("/preview/ytd", dependencies=[Depends(require_admin)])
 def preview_ytd() -> JSONResponse:
     """Won year-to-date, for reconciling against Pipedrive's own Insights."""

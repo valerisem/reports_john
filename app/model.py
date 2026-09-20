@@ -7,7 +7,7 @@ from datetime import date, datetime
 from typing import Any, Iterable
 
 from .brand_history import BrandHistory
-from .campaign_finance import BrandFinance, CampaignFinanceSet
+from .campaign_finance import BrandFinance, CampaignFinanceSet, name_index
 from .brands import Brand, is_placeholder, normalise_name, resolve_brands
 from .team_directory import TeamDirectory
 
@@ -111,6 +111,9 @@ class ReportData:
     history: BrandHistory = field(default_factory=BrandHistory)
     won_ytd: list[WonRow] = field(default_factory=list)
     financial_year_start: date | None = None
+    # Delivered campaigns whose client could not be tied to a brand, so their
+    # revenue and cost sit outside every margin shown.
+    campaigns_unmatched: list[str] = field(default_factory=list)
 
     # -- headline numbers --------------------------------------------------
     @property
@@ -540,6 +543,23 @@ def build_report(
             continue
         deal_ids_by_brand_key.setdefault(resolved_brand.key, set()).add(campaign_deal_id)
 
+    # Roughly a quarter of campaigns carry a pd_deal_id that no longer exists
+    # in Pipedrive - historic records numbered under an older scheme. Those
+    # fall back to the client name, matched against a brand's own spellings or
+    # its domain label, so "Opera" and "Opera Ltd" reach the brand Pipedrive
+    # calls "Opera Browser" at opera.com. A name pointing at two brands is
+    # dropped rather than guessed at.
+    by_name = name_index(brands_by_org)
+    unmatched_campaigns: list[str] = []
+    for campaign_deal_id, campaign in finance.by_deal.items():
+        if campaign_deal_id in campaign_deal_orgs or not campaign.is_delivered:
+            continue
+        matched_key = by_name.get(normalise_name(campaign.client_name))
+        if matched_key:
+            deal_ids_by_brand_key.setdefault(matched_key, set()).add(campaign_deal_id)
+        elif campaign.has_cost:
+            unmatched_campaigns.append(campaign.client_name or "(no client name)")
+
     brand_by_name: dict[str, Brand] = {}
     for brand in brands_by_org.values():
         brand_by_name.setdefault(brand.name, brand)
@@ -641,4 +661,5 @@ def build_report(
         history=history,
         won_ytd=won_rows,
         financial_year_start=financial_year_start,
+        campaigns_unmatched=sorted(set(unmatched_campaigns), key=str.lower),
     )

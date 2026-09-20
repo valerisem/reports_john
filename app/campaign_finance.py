@@ -21,6 +21,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
+from .brands import Brand, is_placeholder, normalise_name
 from .team_directory import SupabaseClient, TeamDirectoryError
 
 log = logging.getLogger(__name__)
@@ -170,3 +171,33 @@ def load_campaign_finance(url: str, api_key: str) -> CampaignFinanceSet:
     except (TeamDirectoryError, Exception) as exc:  # noqa: BLE001 - never fatal
         log.warning("Campaign profitability could not be loaded: %s", exc)
         return CampaignFinanceSet()
+
+
+def _domain_label(domain: str) -> str:
+    """opera.com -> 'opera'. The label a client is usually called by.
+
+    Brand domains arrive normalised, but a stray 'www.' would otherwise index
+    every brand under the same useless label.
+    """
+    if not domain:
+        return ""
+    cleaned = domain.strip().lower().removeprefix("www.")
+    return normalise_name(cleaned.split(".")[0])
+
+
+def name_index(brands: dict[int, Brand]) -> dict[str, str]:
+    """Normalised client name -> brand key, for campaigns with no usable deal.
+
+    A name that would point at two different brands is dropped rather than
+    guessed at: a wrong merge is far worse than a missing figure.
+    """
+    candidates: dict[str, set[str]] = {}
+    for brand in brands.values():
+        if not brand.key:
+            continue
+        labels = {normalise_name(name) for name in brand.names}
+        labels |= {_domain_label(domain) for domain in brand.domains}
+        for label in labels:
+            if label and not is_placeholder(label):
+                candidates.setdefault(label, set()).add(brand.key)
+    return {label: keys.pop() for label, keys in candidates.items() if len(keys) == 1}

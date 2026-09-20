@@ -583,3 +583,38 @@ def test_email_shows_margin_beside_the_value():
     assert priced[0].margin == pytest.approx(0.6)
     html = render_email(report, title="t", greeting_name="John", sender_name="Valeria")
     assert "#9a99a5" in html  # grey margin styling next to the black value
+
+
+def test_campaigns_with_a_dead_deal_id_fall_back_to_the_client_name():
+    """~111 campaigns carry a pd_deal_id Pipedrive 404s on; keep their money."""
+    from app.brands import Brand
+    from app.campaign_finance import name_index
+
+    brands = {71: Brand(key="opera.com", name="Opera Browser", org_ids=[71],
+                        names=["Opera Browser"], domains={"opera.com"}, won_deals=3)}
+    index = name_index(brands)
+    # Both the brand's own spelling and its domain label reach the same brand.
+    assert index["operabrowser"] == "opera.com"
+    assert index["opera"] == "opera.com"
+
+
+def test_an_ambiguous_client_name_is_dropped_not_guessed():
+    from app.brands import Brand
+    from app.campaign_finance import name_index
+
+    brands = {
+        1: Brand(key="a.com", name="Acme", org_ids=[1], names=["Acme"], domains={"a.com"}, won_deals=1),
+        2: Brand(key="b.com", name="Acme", org_ids=[2], names=["Acme"], domains={"b.com"}, won_deals=1),
+    }
+    assert "acme" not in name_index(brands)
+
+
+def test_unmatched_campaigns_are_reported_not_hidden():
+    payload = fixture.load()
+    finance = build_finance(
+        [{"pd_deal_id": 999_999, "client_name": "Ghost Client Ltd", "stage": "Delivered",
+          "budget_gbp": 50_000, "current_spend_gbp": 20_000}],
+        [],
+    )
+    report = build_report(**payload, finance=finance, campaign_deal_orgs={})
+    assert "Ghost Client Ltd" in report.campaigns_unmatched
