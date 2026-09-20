@@ -76,16 +76,46 @@ body{margin:0;padding:0;-webkit-text-size-adjust:100%;}
 {{ rule() }}</td></tr>
 <tr><td class="pad" style="padding:26px 40px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
 {%- for entry in leaderboard.entries %}
+<td width="33%" align="center" valign="top" style="padding:0 6px;text-align:center;">
+<div style="{{ cell_label() }}font-size:11px;line-height:15px;font-weight:700;color:#6b6a75;">{{ entry.name }}&rsquo;s pod</div>
+<div style="{{ cell_label() }}font-size:22px;line-height:27px;font-weight:700;color:#15141f;letter-spacing:-0.4px;padding-top:2px;">{{ entry.total }}</div>
+<div style="{{ cell_label() }}font-size:12px;line-height:16px;color:#6b6a75;">{{ entry.deals }} deal{{ 's' if entry.deals != 1 else '' }}</div>
+</td>
+{%- endfor %}
+</tr></table></td></tr>
+<tr><td class="pad" style="padding:14px 40px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+{%- for entry in leaderboard.entries %}
 <td width="33%" align="center" valign="bottom" style="padding:0 6px;text-align:center;">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
 {%- if entry.photo %}
 <tr><td align="center" style="padding:0 0 4px;"><img src="{{ entry.photo }}" height="46" alt="{{ entry.name }}" style="display:block;height:46px;width:auto;border:0;margin:0 auto;"></td></tr>
 {%- endif %}
 <tr><td align="center" style="{{ cell_label() }}font-size:13px;line-height:17px;color:#2b2a35;">{{ entry.name }}</td></tr>
-<tr><td align="center" style="{{ cell_label() }}font-size:19px;line-height:24px;font-weight:700;color:#15141f;letter-spacing:-0.3px;padding-top:2px;">{{ entry.value }}</td></tr>
-<tr><td align="center" style="{{ cell_label() }}font-size:12px;line-height:16px;color:#6b6a75;">{{ entry.deals }} deal{{ 's' if entry.deals != 1 else '' }}</td></tr>
+<tr><td align="center" style="{{ cell_label() }}font-size:12px;line-height:16px;color:#6b6a75;padding-top:2px;white-space:nowrap;"><span style="font-weight:700;color:#2b2a35;">{{ entry.direct }}</span> ({{ entry.direct_percent }}% self-managed)</td></tr>
 <tr><td align="center" style="padding-top:10px;"><table role="presentation" width="56" cellpadding="0" cellspacing="0" border="0" align="center" style="width:56px;margin:0 auto;"><tr><td width="56" height="{{ entry.height }}" bgcolor="{{ entry.colour }}" align="center" valign="top" style="width:56px;height:{{ entry.height }}px;background-color:{{ entry.colour }};padding-top:10px;{{ cell_label() }}font-size:18px;line-height:22px;font-weight:700;color:{{ entry.numeral_colour }};">{{ entry.rank }}</td></tr></table></td></tr>
 </table>
+</td>
+{%- endfor %}
+</tr></table></td></tr>
+<tr><td class="pad" style="padding:22px 40px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #e7e5ec;"><tr>
+{%- for entry in leaderboard.entries %}
+<td width="33%" align="center" valign="bottom" style="padding:16px 4px 0;text-align:center;">
+{%- if entry.managers %}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;"><tr>
+{%- for manager in entry.managers %}
+<td align="center" valign="bottom" style="padding:0 5px;text-align:center;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
+{%- if manager.photo %}
+<tr><td align="center"><img src="{{ manager.photo }}" height="42" alt="{{ manager.name }}" style="display:block;height:42px;width:auto;border:0;margin:0 auto;"></td></tr>
+{%- endif %}
+<tr><td align="center" style="{{ cell_label() }}font-size:11px;line-height:15px;color:#2b2a35;padding-top:3px;white-space:nowrap;">{{ manager.name }}</td></tr>
+<tr><td align="center" style="{{ cell_label() }}font-size:11px;line-height:15px;font-weight:700;color:#15141f;">{{ manager.value }}</td></tr>
+<tr><td align="center" style="padding-top:6px;"><table role="presentation" width="32" cellpadding="0" cellspacing="0" border="0" align="center" style="width:32px;margin:0 auto;"><tr><td width="32" height="{{ manager.height }}" bgcolor="{{ entry.colour }}" style="width:32px;height:{{ manager.height }}px;background-color:{{ entry.colour }};font-size:0;line-height:0;">&nbsp;</td></tr></table></td></tr>
+</table>
+</td>
+{%- endfor %}
+</tr></table>
+{%- endif %}
 </td>
 {%- endfor %}
 </tr></table></td></tr>
