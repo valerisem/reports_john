@@ -46,6 +46,13 @@ _env = Environment(
 )
 
 
+def _margin_label(brand) -> str:
+    """Gross margin, starred when it is a forecast rather than a final cost."""
+    if brand.margin is None:
+        return ""
+    return percent(brand.margin) + ("*" if brand.margin_is_forecast else "")
+
+
 def _brand_entries(data: ReportData, status: str, with_poc: bool) -> list[dict]:
     entries = []
     for brand in data.top_brands(status):
@@ -54,7 +61,7 @@ def _brand_entries(data: ReportData, status: str, with_poc: bool) -> list[dict]:
                 "name": brand.name,
                 "url": website_url(brand.website),
                 "value": compact_gbp(brand.weighted_gbp),
-                "margin": percent(brand.margin) if brand.margin is not None else "",
+                "margin": _margin_label(brand),
                 "poc": brand.contacts[0] if (with_poc and brand.contacts) else "",
             }
         )
@@ -193,7 +200,7 @@ def render_email(
     # not re-announced week after week. Often this is empty.
     def entry(brand) -> dict:
         return {
-            "margin": percent(brand.margin) if brand.margin is not None else "",
+            "margin": _margin_label(brand),
             "name": brand.name,
             "url": website_url(brand.website),
             "value": compact_gbp(brand.weighted_gbp),
@@ -249,6 +256,12 @@ def render_email(
                 "extra_brands": fallback,
             },
         ],
+        "margin_note": (
+            "Percentages are gross margin on delivered campaigns. "
+            "* forecast cost - the campaign is still running."
+            if data.has_forecast_margin
+            else "Percentages are gross margin on delivered campaigns."
+        ) if any(b.margin is not None for b in data.brands) else "",
         "remaining_brands": max(0, len(data.brands) - shown),
         "leaderboard": {
             "heading": "Weighted Pipeline Leaderboard",

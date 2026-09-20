@@ -78,6 +78,9 @@ body{margin:0;padding:0;-webkit-text-size-adjust:100%;}
 </table></td>
 {%- endfor %}
 </tr></table></td></tr>
+{%- if margin_note %}
+<tr><td class="pad" style="padding:16px 40px 0;{{ cell_label() }}font-size:12px;line-height:18px;font-style:italic;color:#9a99a5;text-align:center;">{{ margin_note }}</td></tr>
+{%- endif %}
 {%- if remaining_brands > 0 %}
 <tr><td class="pad" style="padding:16px 40px 0;{{ cell_label() }}font-size:12px;line-height:18px;font-style:italic;color:#9a99a5;text-align:center;">{{ remaining_brands }} other brand{{ 's' if remaining_brands != 1 else '' }}, retained and new {{ 'are' if remaining_brands != 1 else 'is' }} in the pipeline. The full list is in the attached Excel file.</td></tr>
 {%- endif %}

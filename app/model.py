@@ -85,6 +85,11 @@ class BrandRow:
         """Gross margin on delivered campaigns, 0..1, or None if unmeasured."""
         return self.finance.margin if self.finance else None
 
+    @property
+    def margin_is_forecast(self) -> bool:
+        """True when the margin is planned cost, not money actually spent."""
+        return bool(self.finance and self.finance.is_forecast and self.margin is not None)
+
 
 @dataclass
 class WonRow:
@@ -148,6 +153,11 @@ class ReportData:
         pool = [b for b in self.brands if b.is_new_this_report]
         pool.sort(key=lambda b: (-b.weighted_gbp, b.name.lower()))
         return pool
+
+    @property
+    def has_forecast_margin(self) -> bool:
+        """Any brand whose margin is a forecast, so the note earns its place."""
+        return any(b.margin_is_forecast for b in self.brands)
 
     @property
     def won_ytd_gbp(self) -> float:

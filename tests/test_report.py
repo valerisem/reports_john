@@ -141,6 +141,7 @@ def test_brands_headers_match_the_template(workbook):
         "Brand", "Client status", "Industry", "Sub-industry", "Website", "Open deals",
         "Pipeline (£)", "Furthest stage", "Account Owner", "Account Manager", "Contacts",
         "Delivered campaigns", "Delivered revenue (£)", "Gross profit (£)", "Gross margin",
+        "Margin basis",
     ]
 
 
@@ -618,3 +619,51 @@ def test_unmatched_campaigns_are_reported_not_hidden():
     )
     report = build_report(**payload, finance=finance, campaign_deal_orgs={})
     assert "Ghost Client Ltd" in report.campaigns_unmatched
+
+
+# -- forecast margins ------------------------------------------------------
+def test_a_running_campaign_uses_planned_spend_and_is_flagged():
+    finance = build_finance(
+        [{"pd_deal_id": 1, "client_name": "X", "stage": "WIP",
+          "budget_gbp": 100_000, "planned_spend": 45_000}],
+        [],
+    )
+    rolled = finance.roll_up({1})
+    assert rolled.campaigns == 1
+    assert rolled.margin == pytest.approx(0.55)
+    assert rolled.is_forecast is True
+
+
+def test_delivered_campaigns_win_over_a_forecast():
+    """A measured margin is never blended with a predicted one."""
+    finance = build_finance(
+        [{"pd_deal_id": 1, "client_name": "X", "stage": "Delivered",
+          "budget_gbp": 100_000, "current_spend_gbp": 60_000},
+         {"pd_deal_id": 2, "client_name": "X", "stage": "WIP",
+          "budget_gbp": 100_000, "planned_spend": 10_000}],
+        [],
+    )
+    rolled = finance.roll_up({1, 2})
+    assert rolled.campaigns == 1
+    assert rolled.is_forecast is False
+    assert rolled.margin == pytest.approx(0.40)
+
+
+def test_email_stars_a_forecast_margin_and_explains_it():
+    payload = fixture.load()
+    finance = build_finance(
+        [{"pd_deal_id": 1, "client_name": "X", "stage": "WIP",
+          "budget_gbp": 100_000, "planned_spend": 45_000}],
+        [],
+    )
+    org_id = next(iter(payload["orgs"]))
+    report = build_report(**payload, finance=finance, campaign_deal_orgs={1: org_id})
+    assert report.has_forecast_margin is True
+    html = render_email(report, title="t", greeting_name="John", sender_name="Valeria")
+    assert "55%*" in html
+    assert "forecast cost - the campaign is still running" in html
+
+
+def test_the_margin_note_is_absent_when_nothing_is_priced(data):
+    html = render_email(data, title="t", greeting_name="John", sender_name="Valeria")
+    assert "gross margin on delivered campaigns" not in html

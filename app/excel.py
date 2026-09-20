@@ -309,6 +309,7 @@ BRAND_COLUMNS = [
     ("M", "Delivered revenue (£)", 18),
     ("N", "Gross profit (£)", 16),
     ("O", "Gross margin", 13),
+    ("P", "Margin basis", 14),
 ]
 
 
@@ -341,6 +342,10 @@ def _build_brands(ws: Worksheet, data: ReportData, deal_last: int, last_row: int
             "M": round(brand.finance.revenue_gbp, 2) if brand.finance and brand.finance.campaigns else "",
             "N": round(brand.finance.gross_profit_gbp, 2) if brand.finance and brand.finance.campaigns else "",
             "O": brand.margin if brand.margin is not None else "",
+            "P": (
+                ("Forecast" if brand.margin_is_forecast else "Actual")
+                if brand.margin is not None else ""
+            ),
         }
         for column, value in values.items():
             cell = ws[f"{column}{row}"]
@@ -352,7 +357,7 @@ def _build_brands(ws: Worksheet, data: ReportData, deal_last: int, last_row: int
                     else "0%" if column == "O"
                     else "General"
                 ),
-                align="center" if column in {"B", "F", "L", "O"} else "general",
+                align="center" if column in {"B", "F", "L", "O", "P"} else "general",
                 bold=column == "A",
                 color=INDIGO if column == "A" else BLACK,
                 vertical="top",
@@ -362,7 +367,7 @@ def _build_brands(ws: Worksheet, data: ReportData, deal_last: int, last_row: int
             website.hyperlink = _as_url(brand.website)
             website.font = _font(color=PURPLE, underline="single")
 
-    ws.auto_filter.ref = f"A1:O{last_row}"
+    ws.auto_filter.ref = f"A1:P{last_row}"
     _apply_row_rules(ws, stage_column="H", status_column="B", weighted_column="G", last_row=last_row)
 
 
