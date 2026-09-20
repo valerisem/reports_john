@@ -7,6 +7,7 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from . import brand_history, campaign_finance, email_html, excel, fx, mailer, team_directory
+from .client_aliases import alias_map
 from .config import Settings
 from .model import ReportData, build_report
 from .pipedrive import PipedriveClient
@@ -93,6 +94,7 @@ def collect(settings: Settings, report_date: date | None = None) -> ReportData:
             financial_year_start=fy_start,
             finance=finance,
             campaign_deal_orgs=campaign_deal_orgs,
+            client_aliases=alias_map(settings.client_aliases),
         )
 
 

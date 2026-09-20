@@ -124,6 +124,9 @@ class Settings(BaseSettings):
     show_ytd: bool = True
     # Show delivered-campaign gross margin beside each brand.
     show_profitability: bool = True
+    # Supabase client names to point at a Pipedrive brand by hand, e.g.
+    # "Match.com LLC = Match Group; Rocky Road Games = Rocky Road".
+    client_aliases: str = ""
 
     # --- Web ---------------------------------------------------------------
     port: int = 8000

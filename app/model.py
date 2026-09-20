@@ -8,6 +8,7 @@ from typing import Any, Iterable
 
 from .brand_history import BrandHistory
 from .campaign_finance import BrandFinance, CampaignFinanceSet, name_index
+from .client_aliases import alias_map
 from .brands import Brand, is_placeholder, normalise_name, org_website, resolve_brands
 from .team_directory import TeamDirectory
 
@@ -416,11 +417,13 @@ def build_report(
     financial_year_start: date | None = None,
     finance: CampaignFinanceSet | None = None,
     campaign_deal_orgs: dict[int, int] | None = None,
+    client_aliases: dict[str, str] | None = None,
 ) -> ReportData:
     directory = directory or TeamDirectory()
     history = history or BrandHistory()
     finance = finance or CampaignFinanceSet()
     campaign_deal_orgs = campaign_deal_orgs or {}
+    client_aliases = client_aliases if client_aliases is not None else alias_map()
     # Duplicate organisation records split a brand's won history from its live
     # pipeline, so resolve organisations to brands before anything is counted.
     if brands_by_org is None:
@@ -568,7 +571,10 @@ def build_report(
     for campaign_deal_id, campaign in finance.by_deal.items():
         if campaign_deal_id in campaign_deal_orgs or not campaign.is_delivered:
             continue
-        matched_key = by_name.get(normalise_name(campaign.client_name))
+        label = normalise_name(campaign.client_name)
+        # An alias exists because somebody decided two names are one client,
+        # so it is consulted only after the automatic rules have had a go.
+        matched_key = by_name.get(label) or by_name.get(client_aliases.get(label, ""))
         if matched_key:
             deal_ids_by_brand_key.setdefault(matched_key, set()).add(campaign_deal_id)
         elif campaign.has_cost:

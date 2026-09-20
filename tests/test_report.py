@@ -667,3 +667,47 @@ def test_email_stars_a_forecast_margin_and_explains_it():
 def test_the_margin_note_is_absent_when_nothing_is_priced(data):
     html = render_email(data, title="t", greeting_name="John", sender_name="Valeria")
     assert "gross margin on delivered campaigns" not in html
+
+
+# -- client aliases --------------------------------------------------------
+from app.client_aliases import alias_map, parse_aliases
+
+
+def test_aliases_parse_from_either_form():
+    assert parse_aliases("Match.com LLC = Match Group") == {"matchcom": "match"}
+    assert parse_aliases('{"Match.com LLC": "Match Group"}') == {"matchcom": "match"}
+    assert parse_aliases("A = B; C = D") == {"a": "b", "c": "d"}
+
+
+def test_bad_alias_configuration_is_ignored_not_fatal():
+    assert parse_aliases("") == {}
+    assert parse_aliases("no equals sign here") == {}
+    assert parse_aliases("{not json") == {}
+    # A name aliased to itself would be a no-op, so it is dropped.
+    assert parse_aliases("Same = Same") == {}
+
+
+def test_configured_aliases_override_the_defaults():
+    assert alias_map()["matchcom"] == "match"
+    assert alias_map("Match.com LLC = Something Else")["matchcom"] == "somethingelse"
+
+
+def test_an_alias_attaches_a_campaign_to_the_named_brand():
+    payload = fixture.load()
+    brand_name = build_report(**payload).brands[0].name
+    finance = build_finance(
+        [{"pd_deal_id": 777, "client_name": "Totally Different Ltd", "stage": "Delivered",
+          "budget_gbp": 100_000, "current_spend_gbp": 40_000}],
+        [],
+    )
+    # Without an alias the campaign has nowhere to go.
+    plain = build_report(**payload, finance=finance, campaign_deal_orgs={}, client_aliases={})
+    assert "Totally Different Ltd" in plain.campaigns_unmatched
+
+    aliased = build_report(
+        **payload, finance=finance, campaign_deal_orgs={},
+        client_aliases=parse_aliases(f"Totally Different Ltd = {brand_name}"),
+    )
+    assert aliased.campaigns_unmatched == []
+    brand = next(b for b in aliased.brands if b.name == brand_name)
+    assert brand.margin == pytest.approx(0.6)
