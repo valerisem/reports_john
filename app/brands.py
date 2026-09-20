@@ -126,7 +126,22 @@ def _display_name(names: list[str]) -> str:
     return max(counts, key=score)
 
 
-def resolve_brands(orgs: dict[int, dict], won_counts: dict[int, int] | None = None) -> dict[int, Brand]:
+def org_website(org: dict, website_key: str | None = None) -> str:
+    """The organisation's URL, custom field first.
+
+    Pipedrive's built-in ``website`` is empty on this account; the real URL
+    lives in a custom field. Reading only the built-in silently disabled every
+    domain-based brand merge.
+    """
+    if website_key:
+        value = (org.get("custom_fields") or {}).get(website_key)
+        if isinstance(value, str) and value.strip():
+            return value
+    return org.get("website") or ""
+
+
+def resolve_brands(orgs: dict[int, dict], won_counts: dict[int, int] | None = None,
+                   website_key: str | None = None) -> dict[int, Brand]:
     """Map every organisation id to the Brand it belongs to."""
     won_counts = won_counts or {}
     union = _Union()
@@ -137,7 +152,7 @@ def resolve_brands(orgs: dict[int, dict], won_counts: dict[int, int] | None = No
         union.add(org_id)
         raw_name = org.get("name") or ""
         name_key = "" if is_placeholder(raw_name) else normalise_name(raw_name)
-        domain = normalise_domain(org.get("website") or "")
+        domain = normalise_domain(org_website(org, website_key))
         if name_key:
             union.union(by_name.setdefault(name_key, org_id), org_id)
         if domain:
@@ -153,7 +168,7 @@ def resolve_brands(orgs: dict[int, dict], won_counts: dict[int, int] | None = No
         name = (org.get("name") or "").strip()
         if name:
             brand.names.append(name)
-        domain = normalise_domain(org.get("website") or "")
+        domain = normalise_domain(org_website(org, website_key))
         if domain:
             brand.domains.add(domain)
         brand.won_deals += int(won_counts.get(org_id, org.get("won_deals_count") or 0) or 0)

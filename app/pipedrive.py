@@ -38,6 +38,9 @@ def _as_date(value: Any) -> date | None:
 DEAL_ACCOUNT_MANAGER_LABELS = ("account manager", "account mgr", "am owner")
 ORG_INDUSTRY_LABELS = ("wide niche", "industry")
 ORG_SUB_INDUSTRY_LABELS = ("narrow niche", "sub-industry", "sub industry", "subindustry")
+# Pipedrive ships a built-in "Website" that this account leaves empty and a
+# custom one that holds the real URL, exactly as it does for "Industry".
+ORG_WEBSITE_LABELS = ("website", "web site", "url", "company website")
 
 # Custom fields have a 40-character hex key; built-ins have readable ones.
 CUSTOM_KEY = re.compile(r"^[0-9a-f]{40}$")
@@ -316,5 +319,9 @@ class PipedriveClient:
             "org_sub_industry": self._field_key(
                 "/v1/organizationFields", ORG_SUB_INDUSTRY_LABELS,
                 overrides.get("org_sub_industry", ""),
+            ),
+            "org_website": self._field_key(
+                "/v1/organizationFields", ORG_WEBSITE_LABELS,
+                overrides.get("org_website", ""),
             ),
         }

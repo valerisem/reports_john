@@ -202,3 +202,31 @@ def test_history_on_a_record_with_no_open_deals_still_counts():
     # Clustering only the organisation that has an open deal misses it entirely.
     partial = resolve_brands({2513: orgs[2513]}, {})
     assert partial[2513].is_existing_client is False
+
+
+def test_website_is_read_from_the_custom_field_first():
+    """Pipedrive's built-in Website is empty here; the real URL is custom."""
+    from app.brands import org_website
+
+    org = {"website": None, "custom_fields": {"abc": "https://www.opera.com/"}}
+    assert org_website(org, "abc") == "https://www.opera.com/"
+    # Falls back to the built-in when no custom field is configured or set.
+    assert org_website({"website": "https://x.com"}, None) == "https://x.com"
+    assert org_website({"website": "https://x.com", "custom_fields": {}}, "abc") == "https://x.com"
+
+
+def test_orgs_merge_on_a_custom_field_website():
+    from app.brands import resolve_brands
+
+    orgs = {
+        1: {"id": 1, "name": "Opera Browser", "website": None,
+            "custom_fields": {"w": "https://www.opera.com/"}},
+        2: {"id": 2, "name": "Opera Ltd", "website": None,
+            "custom_fields": {"w": "http://opera.com/about"}},
+    }
+    # Without the key the built-in field is empty, so nothing can merge.
+    assert len({b.key for b in resolve_brands(orgs).values()}) == 2
+    # With it, both records resolve to the one brand at opera.com.
+    merged = resolve_brands(orgs, website_key="w")
+    assert len({b.key for b in merged.values()}) == 1
+    assert merged[1].key == "opera.com"

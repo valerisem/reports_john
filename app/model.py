@@ -8,7 +8,7 @@ from typing import Any, Iterable
 
 from .brand_history import BrandHistory
 from .campaign_finance import BrandFinance, CampaignFinanceSet, name_index
-from .brands import Brand, is_placeholder, normalise_name, resolve_brands
+from .brands import Brand, is_placeholder, normalise_name, org_website, resolve_brands
 from .team_directory import TeamDirectory
 
 # Pipedrive stage name -> the friendlier label used in the newsletter.
@@ -427,7 +427,11 @@ def build_report(
         # Won history is pooled across the cluster, so a brand whose past deals
         # sit on one record and whose open deal sits on another still reads as
         # an existing client.
-        brands_by_org = resolve_brands(orgs, {org_id: 1 for org_id in won_org_ids})
+        brands_by_org = resolve_brands(
+            orgs,
+            {org_id: 1 for org_id in won_org_ids},
+            website_key=field_keys.get("org_website"),
+        )
     stages = sorted(
         (
             Stage(
@@ -527,7 +531,7 @@ def build_report(
                 main_contact=_text(person.get("name"), default=""),
                 industry=_text(_custom(org, industry_key), default=""),
                 sub_industry=_text(_custom(org, sub_industry_key), default=""),
-                website=_text(org.get("website"), default=""),
+                website=_text(org_website(org, field_keys.get("org_website")), default=""),
                 brand_from_title=brand_from_title,
             )
         )
