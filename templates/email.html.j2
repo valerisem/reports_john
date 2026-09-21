@@ -69,7 +69,7 @@ table,td,div,p,span,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;te
 <td class="st{{ loop.index0 }}" width="33%" align="center" valign="top" style="{% if not loop.first %}border-left:1px solid #e7e5ec;{% endif %}padding:2px 4px;text-align:center;"><div class="sv" style="{{ cell_label() }}font-size:32px;line-height:36px;font-weight:700;color:{{ stat.colour }};letter-spacing:-0.8px;">{{ stat.value }}</div><div style="{{ cell_label() }}font-size:14px;line-height:20px;color:#6b6a75;padding-top:2px;">{{ stat.label }}</div></td>
 {%- endfor %}
 </tr></table>
-<div style="{{ cell_label() }}font-size:12px;line-height:17px;color:#9a99a5;font-style:italic;padding-top:12px;text-align:center;">Open pipeline only. Excludes won and lost business.</div>
+<div style="{{ cell_label() }}font-size:10px;line-height:15px;color:#9a99a5;font-style:italic;padding-top:12px;text-align:center;">Open pipeline only. Excludes won and lost business.</div>
 </td></tr></table></td></tr>
 
 <tr><td class="pad" style="padding:52px 40px 0;"><div class="sh" style="{{ cell_label() }}font-size:24px;line-height:30px;font-weight:700;color:#15141f;letter-spacing:-0.3px;text-align:center;">Top brands by weighted value</div>
@@ -93,10 +93,10 @@ table,td,div,p,span,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;te
 {%- endfor %}
 </tr></table></td></tr>
 {%- if margin_note %}
-<tr><td class="pad" style="padding:16px 40px 0;{{ cell_label() }}font-size:12px;line-height:18px;font-style:italic;color:#9a99a5;text-align:center;">{{ margin_note }}</td></tr>
+<tr><td class="pad" style="padding:16px 40px 0;{{ cell_label() }}font-size:10px;line-height:15px;font-style:italic;color:#9a99a5;text-align:center;">{{ margin_note }}</td></tr>
 {%- endif %}
 {%- if remaining_brands > 0 %}
-<tr><td class="pad" style="padding:16px 40px 0;{{ cell_label() }}font-size:12px;line-height:18px;font-style:italic;color:#9a99a5;text-align:center;">{{ remaining_brands }} other brand{{ 's' if remaining_brands != 1 else '' }}, retained and new {{ 'are' if remaining_brands != 1 else 'is' }} in the pipeline. The full list is in the attached Excel file.</td></tr>
+<tr><td class="pad" style="padding:16px 40px 0;{{ cell_label() }}font-size:10px;line-height:15px;font-style:italic;color:#9a99a5;text-align:center;">{{ remaining_brands }} other brand{{ 's' if remaining_brands != 1 else '' }}, retained and new {{ 'are' if remaining_brands != 1 else 'is' }} in the pipeline. The full list is in the attached Excel file.</td></tr>
 {%- endif %}
 
 {%- if leaderboard.entries %}
@@ -168,7 +168,7 @@ table,td,div,p,span,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;te
 <td class="val" width="128" valign="middle" style="padding:4px 0 4px 10px;{{ cell_label() }}font-size:14px;line-height:18px;font-weight:700;color:#15141f;white-space:nowrap;">{{ row.value }}<span class="dl" style="font-weight:400;color:#6b6a75;">&nbsp;&nbsp;{{ row.deals }} deal{{ 's' if row.deals != 1 else '' }}</span></td></tr>
 {%- endfor %}
 </table></td></tr>
-{%- if section.footnote %}<tr><td class="pad" style="padding:14px 40px 0;{{ cell_label() }}font-size:12px;line-height:18px;font-style:italic;color:#9a99a5;text-align:center;">{{ section.footnote }}</td></tr>{% endif %}
+{%- if section.footnote %}<tr><td class="pad" style="padding:14px 40px 0;{{ cell_label() }}font-size:10px;line-height:15px;font-style:italic;color:#9a99a5;text-align:center;">{{ section.footnote }}</td></tr>{% endif %}
 {%- endfor %}
 
 <tr><td class="pad" style="padding:40px 40px {{ 18 if footer_image_url else 36 }}px;{{ cell_label() }}font-size:16px;line-height:24px;color:#2b2a35;">Kindly,<br><span style="font-weight:700;color:#15141f;">{{ sender_name }}</span></td></tr>
