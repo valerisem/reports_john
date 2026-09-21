@@ -9,22 +9,22 @@
 <meta name="color-scheme" content="light only">
 <title>Sales pipeline update</title>
 <style>
-body{margin:0;padding:0;-webkit-text-size-adjust:100%;}
+body{margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;}
+table,td,div,p,span,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;text-size-adjust:100%;}
 @media (max-width:620px){
+ .lbwide{display:none!important;max-height:0!important;overflow:hidden!important;}
+ .lbnarrow{display:block!important;max-height:none!important;overflow:visible!important;font-size:14px!important;line-height:20px!important;}
  .pad{padding-left:20px!important;padding-right:20px!important;}
  .stack{display:block!important;width:100%!important;padding:0!important;}
  .gap{padding-top:32px!important;}
- .val{width:74px!important;}
+ .val{width:70px!important;}
+ .barcell{width:38%!important;}
  .dl{display:block!important;font-size:12px!important;}
  .lab{width:104px!important;}
  .sv{font-size:24px!important;line-height:28px!important;}
  .lab{width:110px!important;font-size:13px!important;}
  .hero{padding:130px 10px {{ 170 if footer_image_url else 0 }}px!important;}
  .sh{font-size:21px!important;line-height:26px!important;}
- /* Three pods of head shots need ~530px; a phone has 320. The podium is
-    swapped for a stacked list rather than scaled down to illegibility. */
- .lbwide{display:none!important;max-height:0!important;overflow:hidden!important;}
- .lbnarrow{display:block!important;max-height:none!important;overflow:visible!important;font-size:inherit!important;line-height:inherit!important;}
  .pod{padding-left:2px!important;padding-right:2px!important;}
  .podname{font-size:10px!important;line-height:13px!important;}
  .podtotal{font-size:16px!important;line-height:20px!important;letter-spacing:-0.2px!important;}
@@ -184,11 +184,11 @@ body{margin:0;padding:0;-webkit-text-size-adjust:100%;}
 <tr><td class="pad" style="padding:18px 40px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 {%- for row in section.rows %}
 <tr><td class="lab" width="150" valign="middle" align="right" style="padding:4px 12px 4px 0;{{ cell_label() }}font-size:14px;line-height:18px;color:#2b2a35;">{{ row.label }}</td>
-<td valign="middle" style="padding:4px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+<td class="barcell" width="62%" valign="middle" style="width:62%;padding:4px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;table-layout:fixed;"><tr>
 {%- if row.segments %}{% set filled = row.segments | sum(attribute='percent') %}
-{%- for seg in row.segments %}<td width="{{ seg.percent }}%" height="16" bgcolor="{{ seg.colour }}" style="width:{{ seg.percent }}%;height:16px;background-color:{{ seg.colour }};font-size:0;line-height:0;">&nbsp;</td>{% endfor %}
-{%- if filled < 100 %}<td width="{{ 100 - filled }}%" style="font-size:0;line-height:0;">&nbsp;</td>{% endif %}
-{%- else %}<td width="{{ row.percent }}%" height="16" bgcolor="{{ section.colour }}" style="background-color:{{ section.colour }};height:16px;font-size:0;line-height:0;">&nbsp;</td>{% if row.percent < 100 %}<td width="{{ 100 - row.percent }}%" style="font-size:0;line-height:0;">&nbsp;</td>{% endif %}
+{%- for seg in row.segments %}<td width="{{ seg.percent }}%" height="16" bgcolor="{{ seg.colour }}" style="width:{{ seg.percent }}%;height:16px;min-width:1px;background-color:{{ seg.colour }};font-size:1px;line-height:16px;">&#8203;</td>{% endfor %}
+{%- if filled < 100 %}<td width="{{ 100 - filled }}%" style="font-size:1px;line-height:16px;">&#8203;</td>{% endif %}
+{%- else %}<td width="{{ row.percent }}%" height="16" bgcolor="{{ section.colour }}" style="background-color:{{ section.colour }};height:16px;min-width:1px;font-size:1px;line-height:16px;">&#8203;</td>{% if row.percent < 100 %}<td width="{{ 100 - row.percent }}%" style="font-size:1px;line-height:16px;">&#8203;</td>{% endif %}
 {%- endif %}
 </tr></table></td>
 <td class="val" width="128" valign="middle" style="padding:4px 0 4px 10px;{{ cell_label() }}font-size:14px;line-height:18px;font-weight:700;color:#15141f;white-space:nowrap;">{{ row.value }}<span class="dl" style="font-weight:400;color:#6b6a75;">&nbsp;&nbsp;{{ row.deals }} deal{{ 's' if row.deals != 1 else '' }}</span></td></tr>
