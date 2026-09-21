@@ -62,6 +62,9 @@ class TeamDirectory:
     owner_by_pipedrive_user: dict[int, str] = field(default_factory=dict)
     name_by_pipedrive_user: dict[int, str] = field(default_factory=dict)
     manager_by_org: dict[int, str] = field(default_factory=dict)
+    # The person's own Pipedrive account, so a won deal can be credited to
+    # whoever owns it rather than to their pod or their accounts.
+    pipedrive_user_by_name: dict[str, int] = field(default_factory=dict)
     pods: list[Pod] = field(default_factory=list)
     loaded: bool = False
 
@@ -79,6 +82,9 @@ class TeamDirectory:
         if org_id is None:
             return fallback
         return self.manager_by_org.get(org_id) or fallback
+
+    def pipedrive_user(self, name: str) -> int | None:
+        return self.pipedrive_user_by_name.get(name)
 
     def pod_for_manager(self, manager: str) -> str | None:
         for pod in self.pods:
@@ -174,6 +180,7 @@ def build_directory(
         lead = members.get(member.pod_id) if member.pod_id else None
         if lead and lead.full_name:
             directory.owner_by_pipedrive_user[member.pipedrive_user_id] = lead.full_name
+        directory.pipedrive_user_by_name.setdefault(member.full_name, member.pipedrive_user_id)
 
     for row in manager_org_rows:
         org_id = _as_int(row.get("pd_org_id"))

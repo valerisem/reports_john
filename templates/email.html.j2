@@ -108,6 +108,7 @@ table,td,div,p,span,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;te
 <div class="podname" style="{{ cell_label() }}font-size:11px;line-height:15px;font-weight:700;color:#6b6a75;">{{ entry.name }}&rsquo;s pod</div>
 <div class="podtotal" style="{{ cell_label() }}font-size:22px;line-height:27px;font-weight:700;color:#15141f;letter-spacing:-0.4px;padding-top:2px;">{{ entry.total }}</div>
 <div class="podsub" style="{{ cell_label() }}font-size:12px;line-height:16px;color:#6b6a75;">{{ entry.deals }} deal{{ 's' if entry.deals != 1 else '' }}</div>
+{%- if entry.pod_ytd %}<div class="mgrtext" style="{{ cell_label() }}font-size:11px;line-height:15px;font-style:italic;color:#9a99a5;">{{ entry.pod_ytd }} won YTD</div>{% endif %}
 </td>
 {%- endfor %}
 </tr></table></td></tr>

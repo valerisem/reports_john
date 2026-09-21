@@ -100,6 +100,10 @@ class WonRow:
     account_owner: str
     account_manager: str
     main_contact: str
+    # The Pipedrive user who owns the deal. A pod lead runs the account, but a
+    # deal is owned - and commissioned - person by person.
+    owner_user_id: int | None
+    owner_name: str
     won_on: date
     value_gbp: float
 
@@ -166,22 +170,38 @@ class ReportData:
     def won_ytd_gbp(self) -> float:
         return sum(w.value_gbp for w in self.won_ytd)
 
-    def _ytd_totals(self, attribute: str) -> dict[str, float]:
-        totals: dict[str, float] = {}
-        for won in self.won_ytd:
-            name = getattr(won, attribute)
-            if name and name != BLANK:
-                totals[name] = totals.get(name, 0.0) + won.value_gbp
-        return totals
+    def ytd_for_pod(self, lead: str) -> float:
+        """Won this financial year across the whole pod.
 
-    def ytd_for_owner(self, name: str) -> float:
-        return self._ytd_totals("account_owner").get(name, 0.0)
+        Every deal owned by anyone in the pod, which is what the pod total
+        above it is the open-pipeline equivalent of.
+        """
+        if not lead or lead == BLANK:
+            return 0.0
+        return sum(w.value_gbp for w in self.won_ytd if w.account_owner == lead)
 
-    def ytd_for_manager(self, name: str) -> float:
-        return self._ytd_totals("account_manager").get(name, 0.0)
+    def ytd_for_person(self, name: str) -> float:
+        """Won this financial year on the deals this person owns themselves.
+
+        A deal is owned person by person in Pipedrive and that is what a
+        commission follows, so this is neither the pod's total nor every win on
+        the accounts they manage. An account manager who joined last month
+        shows what they have won since, not what they inherited.
+        """
+        if not name or name == BLANK:
+            return 0.0
+        user_id = self.directory.pipedrive_user(name)
+        return sum(
+            w.value_gbp for w in self.won_ytd
+            if (user_id is not None and w.owner_user_id == user_id) or w.owner_name == name
+        )
 
     def ytd_for_contact(self, name: str) -> float:
-        return self._ytd_totals("main_contact").get(name, 0.0)
+        totals: dict[str, float] = {}
+        for won in self.won_ytd:
+            if won.main_contact and won.main_contact != BLANK:
+                totals[won.main_contact] = totals.get(won.main_contact, 0.0) + won.value_gbp
+        return totals.get(name, 0.0)
 
     def ytd_by_owner(self) -> list[dict[str, Any]]:
         """Won value so far this financial year, per account owner.
@@ -681,6 +701,8 @@ def build_report(
                     owner_id, _text(users.get(owner_id), default=UNASSIGNED)
                 ),
                 account_manager=directory.account_manager(org_id, ""),
+                owner_user_id=owner_id if isinstance(owner_id, int) else None,
+                owner_name=_text(users.get(owner_id), default=""),
                 main_contact=_text(
                     (persons.get(deal.get("person_id")) or {}).get("name"), default=""
                 ),

@@ -172,7 +172,10 @@ def _leaderboard(owner_rows: list[dict], pod_rows: list[dict],
                 "photo": _photo(row["name"], photo_template),
                 # Won so far this year by the same person, so the podium shows
                 # what landed beside what is still only forecast.
-                "ytd": _won_label(data, "ytd_for_owner", row["name"]),
+                # Three separate figures: the pod's whole book, the lead's own
+                # deals, and each manager's own deals.
+                "pod_ytd": _won_label(data, "ytd_for_pod", row["name"]),
+                "ytd": _won_label(data, "ytd_for_person", row["name"]),
                 "managers": [
                     {
                         "name": first_name(r["manager"]),
@@ -182,7 +185,7 @@ def _leaderboard(owner_rows: list[dict], pod_rows: list[dict],
                         ),
                         "bar_percent": bar_percent(r["weighted_gbp"], am_top),
                         "photo": _photo(r["manager"], photo_template),
-                        "ytd": _won_label(data, "ytd_for_manager", r["manager"]),
+                        "ytd": _won_label(data, "ytd_for_person", r["manager"]),
                     }
                     for r in mine
                 ],

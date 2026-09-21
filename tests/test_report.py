@@ -737,20 +737,28 @@ def test_an_alias_attaches_a_campaign_to_the_named_brand():
 
 
 # -- year to date beside each person ---------------------------------------
-def test_ytd_totals_split_by_owner_manager_and_contact():
+def test_the_three_year_to_date_figures_are_measured_differently():
+    """Pod total, the lead's own deals, and each manager's own deals."""
     payload = fixture.load()
-    owner_id = list(payload["users"])[0]
-    won = [{"id": 1, "title": "W1", "org_id": None, "owner_id": owner_id, "person_id": None,
+    lead_id, other_id = list(payload["users"])[:2]
+    won = [{"id": 1, "title": "W1", "org_id": None, "owner_id": lead_id, "person_id": None,
             "value": 60_000, "currency": "GBP", "won_time": "2026-06-01T10:00:00Z"},
-           {"id": 2, "title": "W2", "org_id": None, "owner_id": owner_id, "person_id": None,
-            "value": 40_000, "currency": "GBP", "won_time": "2026-07-01T10:00:00Z"}]
+           {"id": 2, "title": "W2", "org_id": None, "owner_id": lead_id, "person_id": None,
+            "value": 40_000, "currency": "GBP", "won_time": "2026-07-01T10:00:00Z"},
+           {"id": 3, "title": "W3", "org_id": None, "owner_id": other_id, "person_id": None,
+            "value": 25_000, "currency": "GBP", "won_time": "2026-07-02T10:00:00Z"}]
     report = build_report(**payload, won_deals_payload=won,
                           financial_year_start=_dt.date(2026, 4, 1))
-    owner = report.won_ytd[0].account_owner
-    assert report.ytd_for_owner(owner) == pytest.approx(100_000)
-    assert report.ytd_for_owner("Nobody") == 0
-    # A blank manager or contact never becomes a bucket of its own.
-    assert report.ytd_for_manager("") == 0
+
+    lead, other = payload["users"][lead_id], payload["users"][other_id]
+    # Each person carries only what they own.
+    assert report.ytd_for_person(lead) == pytest.approx(100_000)
+    assert report.ytd_for_person(other) == pytest.approx(25_000)
+    assert report.ytd_for_person("Nobody") == 0
+    assert report.ytd_for_person("") == 0
+    # The pod total is every deal owned by anyone reporting to that lead.
+    pods = {w.account_owner for w in report.won_ytd}
+    assert sum(report.ytd_for_pod(p) for p in pods) == pytest.approx(125_000)
     assert report.ytd_for_contact("") == 0
 
 
