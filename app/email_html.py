@@ -311,10 +311,11 @@ def render_email(
             },
         ],
         "margin_note": (
-            "Percentages are gross margin on delivered campaigns. "
-            "* forecast cost - the campaign is still running."
+            "Percentages are average gross margin on delivered campaigns. "
+            "* means no campaign was delivered fully with client yet so margins "
+            "are based on forecasted gross margin."
             if data.has_forecast_margin
-            else "Percentages are gross margin on delivered campaigns."
+            else "Percentages are average gross margin on delivered campaigns."
         ) if any(b.margin is not None for b in data.brands) else "",
         "remaining_brands": max(0, len(data.brands) - shown),
         "leaderboard": {

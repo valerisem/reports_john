@@ -684,12 +684,12 @@ def test_email_stars_a_forecast_margin_and_explains_it():
     assert report.has_forecast_margin is True
     html = render_email(report, title="t", greeting_name="John", sender_name="Valeria")
     assert "55%*" in html
-    assert "forecast cost - the campaign is still running" in html
+    assert "no campaign was delivered fully with client yet" in html
 
 
 def test_the_margin_note_is_absent_when_nothing_is_priced(data):
     html = render_email(data, title="t", greeting_name="John", sender_name="Valeria")
-    assert "gross margin on delivered campaigns" not in html
+    assert "average gross margin on delivered campaigns" not in html
 
 
 # -- client aliases --------------------------------------------------------
