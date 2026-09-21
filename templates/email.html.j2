@@ -149,7 +149,11 @@ table,td,div,p,span,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;te
 {%- endif %}
 </td>
 {%- endfor %}
-</tr></table></td></tr>
+</tr></table>
+{%- if leaderboard.ytd_note %}
+<div style="{{ cell_label() }}font-size:10px;line-height:15px;font-style:italic;color:#9a99a5;text-align:center;padding-top:16px;">{{ leaderboard.ytd_note }}</div>
+{%- endif %}
+</td></tr>
 
 {%- endif %}
 

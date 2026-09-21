@@ -825,3 +825,17 @@ def test_the_formulas_survive_the_cached_values(workbook):
     """Both, so the sheet stays auditable and still reads on a phone."""
     assert str(workbook["Summary"]["D5"].value).startswith("=SUM(")
     assert str(workbook["Open Deals"]["I2"].value).startswith("=")
+
+
+def test_a_missing_year_to_date_figure_is_explained():
+    """A blank means something here, so the email says what."""
+    payload = fixture.load()
+    report = _ytd(payload, _won_payload(list(payload["users"])[:1]))
+    html = render_email(report, title="t", greeting_name="John", sender_name="Valeria")
+    assert "No figure means none won yet." in html
+    assert "owns in Pipedrive" in html
+
+
+def test_no_year_to_date_note_when_nothing_was_won(data):
+    html = render_email(data, title="t", greeting_name="John", sender_name="Valeria")
+    assert "No figure means none won yet." not in html

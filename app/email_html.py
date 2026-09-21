@@ -324,6 +324,14 @@ def render_email(
         "leaderboard": {
             "heading": "Weighted Pipeline Leaderboard",
             "entries": leaderboard,
+            # A blank is meaningful here, so say what it means rather than
+            # leaving it to be read as a missing number.
+            "ytd_note": (
+                "Year to date is deals won since "
+                f"{data.financial_year_start.strftime('%-d %B %Y')} that the person "
+                "owns in Pipedrive. No figure means none won yet."
+                if data.financial_year_start and data.won_ytd else ""
+            ),
         },
         "bar_sections": [
             {
