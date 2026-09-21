@@ -12,9 +12,7 @@
 body{margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;}
 table,td,div,p,span,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;text-size-adjust:100%;}
 @media (max-width:620px){
- .lbwide{display:none!important;max-height:0!important;overflow:hidden!important;}
- .lbnarrow{display:block!important;max-height:none!important;overflow:visible!important;font-size:14px!important;line-height:20px!important;}
- .pad{padding-left:20px!important;padding-right:20px!important;}
+ .pad{padding-left:14px!important;padding-right:14px!important;}
  .stack{display:block!important;width:100%!important;padding:0!important;}
  .gap{padding-top:32px!important;}
  .val{width:70px!important;}
@@ -25,15 +23,19 @@ table,td,div,p,span,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;te
  .lab{width:110px!important;font-size:13px!important;}
  .hero{padding:130px 10px {{ 170 if footer_image_url else 0 }}px!important;}
  .sh{font-size:21px!important;line-height:26px!important;}
- .pod{padding-left:2px!important;padding-right:2px!important;}
+ .pod{padding-left:1px!important;padding-right:1px!important;}
  .podname{font-size:10px!important;line-height:13px!important;}
  .podtotal{font-size:16px!important;line-height:20px!important;letter-spacing:-0.2px!important;}
  .podsub{font-size:10px!important;line-height:14px!important;}
  .podhead{height:34px!important;}
- .mgrhead{height:30px!important;}
- .mgrtext{font-size:10px!important;line-height:13px!important;}
- .mgrcell{padding-left:1px!important;padding-right:1px!important;}
+ .mgrhead{height:26px!important;}
+ .mgrtext{font-size:9px!important;line-height:12px!important;letter-spacing:-0.2px!important;}
+ .mgrcell{padding-left:0!important;padding-right:0!important;}
  .h1{font-size:28px!important;line-height:33px!important;}
+}
+@media (max-width:359px){
+ .mgrhead{display:none!important;}
+ .pad{padding-left:10px!important;padding-right:10px!important;}
 }
 </style>
 </head>
@@ -100,7 +102,6 @@ table,td,div,p,span,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;te
 {%- if leaderboard.entries %}
 <tr><td class="pad" style="padding:52px 40px 0;"><div class="sh" style="{{ cell_label() }}font-size:24px;line-height:30px;font-weight:700;color:#15141f;letter-spacing:-0.3px;text-align:center;">{{ leaderboard.heading }}</div>
 {{ rule() }}</td></tr>
-<tr><td class="lbwide" style="padding:0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 <tr><td class="pad" style="padding:26px 40px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
 {%- for entry in leaderboard.entries %}
 <td class="pod" width="33%" align="center" valign="top" style="padding:0 6px;text-align:center;">
@@ -148,33 +149,6 @@ table,td,div,p,span,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;te
 </td>
 {%- endfor %}
 </tr></table></td></tr>
-</table></td></tr>
-<tr><td class="lbnarrow" style="display:none;max-height:0;overflow:hidden;mso-hide:all;padding:0;font-size:0;line-height:0;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-{%- for entry in leaderboard.entries %}
-<tr><td class="pad" style="padding:{{ 22 if loop.first else 26 }}px 40px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"{% if not loop.first %} style="border-top:1px solid #e7e5ec;"{% endif %}>
-<tr><td valign="top" width="58" style="padding:{{ 0 if loop.first else 18 }}px 12px 0 0;">{% if entry.photo %}<img src="{{ entry.photo }}" width="46" height="46" alt="{{ entry.name }}" style="display:block;width:46px;height:46px;border:0;">{% endif %}</td>
-<td valign="top" style="padding:{{ 0 if loop.first else 18 }}px 0 0;{{ cell_label() }}">
-<div style="font-size:11px;line-height:15px;font-weight:700;color:#6b6a75;">{{ entry.rank }}. {{ entry.name }}&rsquo;s pod</div>
-<div style="font-size:20px;line-height:25px;font-weight:700;color:#15141f;letter-spacing:-0.3px;">{{ entry.total }}<span style="font-size:12px;font-weight:400;color:#6b6a75;">&nbsp;&middot; {{ entry.deals }} deal{{ 's' if entry.deals != 1 else '' }}</span></div>
-<div style="font-size:12px;line-height:17px;color:#6b6a75;"><span style="font-weight:700;color:#2b2a35;">{{ entry.direct }}</span> ({{ entry.direct_percent }}% self-managed)</div>
-{%- if entry.ytd %}<div style="font-size:11px;line-height:16px;font-style:italic;color:#9a99a5;">{{ entry.ytd }} won YTD</div>{% endif %}
-</td></tr>
-<tr><td colspan="2" style="padding:8px 0 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-<td width="{{ entry.bar_percent }}%" height="12" bgcolor="{{ entry.colour }}" style="height:12px;background-color:{{ entry.colour }};font-size:0;line-height:0;border-radius:6px;">&#8203;</td>
-{%- if entry.bar_percent < 100 %}<td width="{{ 100 - entry.bar_percent }}%" style="font-size:0;line-height:0;">&#8203;</td>{% endif %}
-</tr></table></td></tr>
-{%- for manager in entry.managers %}
-<tr><td colspan="2" style="padding:10px 0 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-<td valign="middle" width="34" style="padding:0 10px 0 0;">{% if manager.photo %}<img src="{{ manager.photo }}" width="30" height="30" alt="{{ manager.name }}" style="display:block;width:30px;height:30px;border:0;">{% endif %}</td>
-<td valign="middle" style="{{ cell_label() }}font-size:12px;line-height:16px;color:#2b2a35;">{{ manager.name }}{% if manager.ytd %}<span style="font-size:11px;font-style:italic;color:#9a99a5;">&nbsp;&middot; {{ manager.ytd }} YTD</span>{% endif %}</td>
-<td valign="middle" align="right" style="{{ cell_label() }}font-size:12px;line-height:16px;font-weight:700;color:#15141f;">{{ manager.value }}</td>
-</tr></table></td></tr>
-{%- endfor %}
-</table></td></tr>
-{%- endfor %}
-</table>
-</td></tr>
 
 {%- endif %}
 

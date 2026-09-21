@@ -248,25 +248,6 @@ def render_email(
             row["stage"], row["value_gbp"], bar["percent"], split, leaderboard
         )
 
-    # Won so far this financial year, so the email shows what landed next to
-    # what is still in play. Hidden entirely on a year with nothing won.
-    ytd_section: list[dict] = []
-    ytd_rows = [row for row in data.ytd_by_owner() if row["deals"]]
-    if ytd_rows:
-        fy_from = data.financial_year_start
-        ytd_section = [
-            {
-                "heading": "Won year to date",
-                "subtitle": f"{compact_gbp(data.won_ytd_gbp)} won by {len(ytd_rows)} owners",
-                "footnote": (
-                    "Closed won deals since "
-                    f"{fy_from.strftime('%-d %B %Y')}." if fy_from else "Closed won deals."
-                ),
-                "colour": ACCENT_PURPLE,
-                "rows": _bar_rows(ytd_rows, "name", "value_gbp", shorten_labels=True),
-            }
-        ]
-
     top_existing = _brand_entries(data, EXISTING, with_poc=False)
     # Only brands John has not been told about before, so the same names are
     # not re-announced week after week. Often this is empty.
@@ -350,7 +331,6 @@ def render_email(
                 "colour": ACCENT_PINK,
                 "rows": stage_bars,
             },
-            *ytd_section,
         ],
     }
     return _env.get_template("email.html.j2").render(**context)

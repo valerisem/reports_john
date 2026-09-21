@@ -504,12 +504,14 @@ def test_email_hides_the_ytd_chart_when_nothing_is_won(data):
     assert "Won year to date" not in html
 
 
-def test_email_shows_the_ytd_chart_when_something_is_won():
+def test_the_email_has_no_separate_year_to_date_chart():
+    """Year to date belongs beside each person, not in a chart of its own."""
     payload = fixture.load()
     report = _ytd(payload, _won_payload(list(payload["users"])[:2]))
     html = render_email(report, title="t", greeting_name="John", sender_name="Valeria")
-    assert "Won year to date" in html
-    assert "Closed won deals since 1 April 2026." in html
+    assert "Won year to date" not in html
+    # The figure itself still reaches the reader, on the podium.
+    assert "won YTD" in html
 
 
 def test_financial_year_start_follows_the_configured_month():
