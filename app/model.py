@@ -56,9 +56,6 @@ class DealRow:
     industry: str
     sub_industry: str
     website: str
-    # The delivery window the deal is sold against, when Pipedrive holds it.
-    campaign_start: date | None = None
-    campaign_end: date | None = None
     # True when no organisation was linked in Pipedrive and the brand name had
     # to be read off the deal title instead.
     brand_from_title: bool = False
@@ -101,6 +98,8 @@ class WonRow:
     brand: str
     title: str
     account_owner: str
+    account_manager: str
+    main_contact: str
     won_on: date
     value_gbp: float
 
@@ -166,6 +165,23 @@ class ReportData:
     @property
     def won_ytd_gbp(self) -> float:
         return sum(w.value_gbp for w in self.won_ytd)
+
+    def _ytd_totals(self, attribute: str) -> dict[str, float]:
+        totals: dict[str, float] = {}
+        for won in self.won_ytd:
+            name = getattr(won, attribute)
+            if name and name != BLANK:
+                totals[name] = totals.get(name, 0.0) + won.value_gbp
+        return totals
+
+    def ytd_for_owner(self, name: str) -> float:
+        return self._ytd_totals("account_owner").get(name, 0.0)
+
+    def ytd_for_manager(self, name: str) -> float:
+        return self._ytd_totals("account_manager").get(name, 0.0)
+
+    def ytd_for_contact(self, name: str) -> float:
+        return self._ytd_totals("main_contact").get(name, 0.0)
 
     def ytd_by_owner(self) -> list[dict[str, Any]]:
         """Won value so far this financial year, per account owner.
@@ -453,8 +469,6 @@ def build_report(
     stage_meta = {stage.name: stage for stage in stages}
 
     am_key = field_keys.get("deal_account_manager")
-    start_key = field_keys.get("deal_campaign_start")
-    end_key = field_keys.get("deal_campaign_end")
     industry_key = field_keys.get("org_industry")
     sub_industry_key = field_keys.get("org_sub_industry")
 
@@ -540,8 +554,6 @@ def build_report(
                 industry=_text(_custom(org, industry_key), default=""),
                 sub_industry=_text(_custom(org, sub_industry_key), default=""),
                 website=_text(org_website(org, field_keys.get("org_website")), default=""),
-                campaign_start=_as_date(_custom(deal, start_key)),
-                campaign_end=_as_date(_custom(deal, end_key)),
                 brand_from_title=brand_from_title,
             )
         )
@@ -667,6 +679,10 @@ def build_report(
                 title=_text(deal.get("title"), default=""),
                 account_owner=directory.account_owner(
                     owner_id, _text(users.get(owner_id), default=UNASSIGNED)
+                ),
+                account_manager=directory.account_manager(org_id, ""),
+                main_contact=_text(
+                    (persons.get(deal.get("person_id")) or {}).get("name"), default=""
                 ),
                 won_on=won_on,
                 value_gbp=float(deal.get("value") or 0) * rates.get(currency, 1.0),

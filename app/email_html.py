@@ -48,6 +48,14 @@ _env = Environment(
 )
 
 
+def _contact_ytd(data: ReportData, brand, with_poc: bool) -> str:
+    """Won so far this year on deals with this brand's main contact."""
+    if not with_poc or not brand.contacts:
+        return ""
+    won = data.ytd_for_contact(brand.contacts[0])
+    return compact_gbp(won) if won else ""
+
+
 def _margin_label(brand) -> str:
     """Gross margin, starred when it is a forecast rather than a final cost."""
     if brand.margin is None:
@@ -65,6 +73,7 @@ def _brand_entries(data: ReportData, status: str, with_poc: bool) -> list[dict]:
                 "value": compact_gbp(brand.weighted_gbp),
                 "margin": _margin_label(brand),
                 "poc": brand.contacts[0] if (with_poc and brand.contacts) else "",
+                "poc_ytd": _contact_ytd(data, brand, with_poc),
             }
         )
     return entries
@@ -84,6 +93,18 @@ def _bar_rows(rows: list[dict], label_key: str, value_key: str, *,
     ]
 
 
+def _won_label(data: "ReportData | None", method: str, name: str) -> str:
+    """Won so far this year, or nothing at all.
+
+    A zero would read as a bad year rather than a year no one has closed in
+    yet, so an empty string keeps the line off the page entirely.
+    """
+    if data is None or not name:
+        return ""
+    won = getattr(data, method)(name)
+    return compact_gbp(won) if won else ""
+
+
 def _photo(name: str, template: str) -> str:
     """The cut-out head for a person, named after their first name.
 
@@ -97,7 +118,7 @@ def _photo(name: str, template: str) -> str:
 
 
 def _leaderboard(owner_rows: list[dict], pod_rows: list[dict],
-                 photo_template: str) -> list[dict]:
+                 photo_template: str, data: ReportData | None = None) -> list[dict]:
     """The three pods, best first, each with the managers inside it.
 
     The pod total is every deal the lead owns; a manager's figure is the slice
@@ -146,6 +167,9 @@ def _leaderboard(owner_rows: list[dict], pod_rows: list[dict],
                     PODIUM_MIN_PX + (row["weighted_gbp"] / top) * PODIUM_RANGE_PX
                 ),
                 "photo": _photo(row["name"], photo_template),
+                # Won so far this year by the same person, so the podium shows
+                # what landed beside what is still only forecast.
+                "ytd": _won_label(data, "ytd_for_owner", row["name"]),
                 "managers": [
                     {
                         "name": first_name(r["manager"]),
@@ -154,6 +178,7 @@ def _leaderboard(owner_rows: list[dict], pod_rows: list[dict],
                             MGR_MIN_PX + (r["weighted_gbp"] / am_top) * MGR_RANGE_PX
                         ),
                         "photo": _photo(r["manager"], photo_template),
+                        "ytd": _won_label(data, "ytd_for_manager", r["manager"]),
                     }
                     for r in mine
                 ],
@@ -211,7 +236,7 @@ def render_email(
     stage_rows = [row for row in data.by_stage() if row["deals"]]
     owner_rows = [row for row in data.by_owner() if row["deals"]]
 
-    leaderboard = _leaderboard(owner_rows, data.by_pod(), owner_photo_url_template)
+    leaderboard = _leaderboard(owner_rows, data.by_pod(), owner_photo_url_template, data)
     split = data.by_stage_owner()
     stage_bars = _bar_rows(stage_rows, "label", "value_gbp", max_fill=94)
     for bar, row in zip(stage_bars, stage_rows):
@@ -248,6 +273,7 @@ def render_email(
             "url": website_url(brand.website),
             "value": compact_gbp(brand.weighted_gbp),
             "poc": brand.contacts[0] if brand.contacts else "",
+            "poc_ytd": _contact_ytd(data, brand, True),
         }
 
     new_brands = data.brands_new_this_report[:10]

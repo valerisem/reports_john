@@ -732,3 +732,38 @@ def test_an_alias_attaches_a_campaign_to_the_named_brand():
     assert aliased.campaigns_unmatched == []
     brand = next(b for b in aliased.brands if b.name == brand_name)
     assert brand.margin == pytest.approx(0.6)
+
+
+# -- year to date beside each person ---------------------------------------
+def test_ytd_totals_split_by_owner_manager_and_contact():
+    payload = fixture.load()
+    owner_id = list(payload["users"])[0]
+    won = [{"id": 1, "title": "W1", "org_id": None, "owner_id": owner_id, "person_id": None,
+            "value": 60_000, "currency": "GBP", "won_time": "2026-06-01T10:00:00Z"},
+           {"id": 2, "title": "W2", "org_id": None, "owner_id": owner_id, "person_id": None,
+            "value": 40_000, "currency": "GBP", "won_time": "2026-07-01T10:00:00Z"}]
+    report = build_report(**payload, won_deals_payload=won,
+                          financial_year_start=_dt.date(2026, 4, 1))
+    owner = report.won_ytd[0].account_owner
+    assert report.ytd_for_owner(owner) == pytest.approx(100_000)
+    assert report.ytd_for_owner("Nobody") == 0
+    # A blank manager or contact never becomes a bucket of its own.
+    assert report.ytd_for_manager("") == 0
+    assert report.ytd_for_contact("") == 0
+
+
+def test_the_podium_shows_won_year_to_date_beside_the_pipeline():
+    payload = fixture.load()
+    owner_id = list(payload["users"])[0]
+    won = [{"id": 1, "title": "W", "org_id": None, "owner_id": owner_id, "person_id": None,
+            "value": 250_000, "currency": "GBP", "won_time": "2026-06-01T10:00:00Z"}]
+    report = build_report(**payload, won_deals_payload=won,
+                          financial_year_start=_dt.date(2026, 4, 1))
+    html = render_email(report, title="t", greeting_name="John", sender_name="Valeria")
+    assert "won YTD" in html
+    assert compact_gbp(250_000) in html
+
+
+def test_no_ytd_text_when_nothing_has_been_won(data):
+    html = render_email(data, title="t", greeting_name="John", sender_name="Valeria")
+    assert "won YTD" not in html
