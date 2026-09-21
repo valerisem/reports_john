@@ -769,3 +769,51 @@ def test_the_podium_shows_won_year_to_date_beside_the_pipeline():
 def test_no_ytd_text_when_nothing_has_been_won(data):
     html = render_email(data, title="t", greeting_name="John", sender_name="Valeria")
     assert "won YTD" not in html
+
+
+# -- the workbook must carry its own numbers -------------------------------
+@pytest.fixture(scope="module")
+def cached_workbook(data):
+    """The workbook as a reader that does not calculate would see it."""
+    return openpyxl.load_workbook(io.BytesIO(build_workbook(data).getvalue()), data_only=True)
+
+
+def test_computed_cells_store_their_result_not_only_a_formula(cached_workbook, data):
+    """iPhone Mail and Quick Look never calculate; they show what is stored.
+
+    Without a cached result every figure read as blank or zero on a phone.
+    """
+    summary = cached_workbook["Summary"]
+    assert summary["B5"].value == data.open_deal_count
+    assert summary["D5"].value == pytest.approx(data.pipeline_gbp, abs=0.01)
+    assert summary["H5"].value == pytest.approx(data.weighted_gbp, abs=0.01)
+    assert summary["J5"].value == pytest.approx(data.new_business_gbp, abs=0.01)
+
+
+def test_deal_and_brand_rows_store_their_results_too(cached_workbook, data):
+    deals = cached_workbook["Open Deals"]
+    first = data.deals[0]
+    assert deals["I2"].value == pytest.approx(first.value_gbp, abs=0.01)
+    assert deals["K2"].value == pytest.approx(first.weighted_gbp, abs=0.01)
+
+    brands = cached_workbook["Brands"]
+    top = data.brands[0]
+    assert brands["F2"].value == top.open_deals
+    assert brands["G2"].value == pytest.approx(top.pipeline_gbp, abs=0.01)
+    assert brands["H2"].value == top.furthest_stage
+
+
+def test_stage_and_owner_tables_store_their_results(cached_workbook, data):
+    summary = cached_workbook["Summary"]
+    stage = data.by_stage()[0]
+    assert summary["C10"].value == stage["deals"]
+    assert summary["E10"].value == pytest.approx(stage["value_gbp"], abs=0.01)
+    owner = next(r for r in data.by_owner() if r["name"] == data.account_owners[0])
+    assert summary["I10"].value == owner["deals"]
+    assert summary["J10"].value == pytest.approx(owner["value_gbp"], abs=0.01)
+
+
+def test_the_formulas_survive_the_cached_values(workbook):
+    """Both, so the sheet stays auditable and still reads on a phone."""
+    assert str(workbook["Summary"]["D5"].value).startswith("=SUM(")
+    assert str(workbook["Open Deals"]["I2"].value).startswith("=")

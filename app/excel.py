@@ -8,7 +8,9 @@ audit the numbers in Excel.
 from __future__ import annotations
 
 from datetime import date
+import zipfile
 from io import BytesIO
+from xml.etree import ElementTree
 
 from openpyxl import Workbook
 from openpyxl.chart import BarChart, Reference
@@ -99,6 +101,7 @@ def _print_setup(ws: Worksheet) -> None:
 
 # --------------------------------------------------------------------------
 def build_workbook(data: ReportData) -> BytesIO:
+    cache = FormulaCache()
     wb = Workbook()
     summary = wb.active
     summary.title = "Summary"
@@ -112,17 +115,16 @@ def build_workbook(data: ReportData) -> BytesIO:
     brand_last = max(n_brands + 1, 2)
 
     _build_settings(settings_ws, data)
-    _build_deals(deals_ws, data, deal_last)
-    _build_brands(brands_ws, data, deal_last, brand_last)
-    _build_summary(summary, data, deal_last)
+    _build_deals(deals_ws, data, deal_last, cache)
+    _build_brands(brands_ws, data, deal_last, brand_last, cache)
+    _build_summary(summary, data, deal_last, cache)
 
     for sheet in (summary, deals_ws, brands_ws, settings_ws):
         _print_setup(sheet)
 
     buffer = BytesIO()
     wb.save(buffer)
-    buffer.seek(0)
-    return buffer
+    return _inject_cached_values(buffer, cache)
 
 
 # -- Settings --------------------------------------------------------------
@@ -195,7 +197,9 @@ DEAL_COLUMNS = [
 ]
 
 
-def _build_deals(ws: Worksheet, data: ReportData, last_row: int) -> None:
+def _build_deals(ws: Worksheet, data: ReportData, last_row: int,
+                 cache: FormulaCache | None = None) -> None:
+    cache = cache if cache is not None else FormulaCache()
     currency_ref, stage_ref, prob_ref = _settings_refs(data)
     for column, _, width in DEAL_COLUMNS:
         ws.column_dimensions[column].width = width
@@ -228,6 +232,12 @@ def _build_deals(ws: Worksheet, data: ReportData, last_row: int) -> None:
             "Q": deal.sub_industry,
             "R": deal.website,
         }
+        days_in_stage = (
+            (data.report_date - deal.stage_changed).days if deal.stage_changed else None
+        )
+        for column, cached in (("I", deal.value_gbp), ("J", deal.probability),
+                               ("K", deal.weighted_gbp), ("M", days_in_stage)):
+            cache.put(ws, f"{column}{row}", cached)
         formats = {"G": INT, "I": GBP, "J": PCT, "K": GBP, "L": DATE_SHORT, "N": DATE_SHORT}
         centered = {"E", "F", "H", "J", "M"}
         for column, value in values.items():
@@ -313,7 +323,9 @@ BRAND_COLUMNS = [
 ]
 
 
-def _build_brands(ws: Worksheet, data: ReportData, deal_last: int, last_row: int) -> None:
+def _build_brands(ws: Worksheet, data: ReportData, deal_last: int, last_row: int,
+                  cache: FormulaCache | None = None) -> None:
+    cache = cache if cache is not None else FormulaCache()
     _, stage_ref, _ = _settings_refs(data)
     stage_order_ref = stage_ref.replace("$A$", "$B$")
     for column, _, width in BRAND_COLUMNS:
@@ -349,6 +361,9 @@ def _build_brands(ws: Worksheet, data: ReportData, deal_last: int, last_row: int
                 if brand.margin is not None else ""
             ),
         }
+        for column, cached in (("F", brand.open_deals), ("G", brand.pipeline_gbp),
+                               ("H", brand.furthest_stage)):
+            cache.put(ws, f"{column}{row}", cached)
         for column, value in values.items():
             cell = ws[f"{column}{row}"]
             cell.value = value
@@ -403,7 +418,8 @@ def _kpi(ws: Worksheet, label_cell: str, value_cell: str, span: int, label: str,
 
 def _table(ws: Worksheet, *, title: str, title_cell: str, columns: list[tuple[str, str]],
            rows: list[list], header_row: int, tint: str | None, total_label: str,
-           formats: dict[str, str]) -> int:
+           formats: dict[str, str], cache: FormulaCache | None = None,
+           cached_rows: list[list] | None = None) -> int:
     """Render one Summary block; returns the total row number."""
     ws[title_cell] = title
     ws[title_cell].font = _font(size=13, bold=True, color=INDIGO)
@@ -414,9 +430,12 @@ def _table(ws: Worksheet, *, title: str, title_cell: str, columns: list[tuple[st
     for offset, values in enumerate(rows):
         row = first + offset
         ws.row_dimensions[row].height = DATA_ROW_HEIGHT
-        for (column, _), value in zip(columns, values):
+        computed = cached_rows[offset] if cached_rows and offset < len(cached_rows) else None
+        for index, ((column, _), value) in enumerate(zip(columns, values)):
             cell = ws[f"{column}{row}"]
             cell.value = value
+            if cache is not None and computed and index < len(computed):
+                cache.put(ws, f"{column}{row}", computed[index])
             _style_body(
                 cell,
                 number_format=formats.get(column, "General"),
@@ -436,6 +455,14 @@ def _table(ws: Worksheet, *, title: str, title_cell: str, columns: list[tuple[st
             cell.value = f"={weighted}{total_row}/{value}{total_row}"
         else:
             cell.value = f"=SUM({column}{first}:{column}{last})"
+        if cache is not None and cached_rows and index:
+            column_values = [r[index] for r in cached_rows if index < len(r) and isinstance(r[index], (int, float))]
+            if formats.get(column) == PCT:
+                totals = [sum(r[i] for r in cached_rows if isinstance(r[i], (int, float)))
+                          for i in (len(columns) - 2, len(columns) - 1)]
+                cache.put(ws, f"{column}{total_row}", (totals[1] / totals[0]) if totals[0] else 0)
+            elif column_values:
+                cache.put(ws, f"{column}{total_row}", sum(column_values))
         _style_body(
             cell,
             number_format=formats.get(column, "General"),
@@ -477,7 +504,9 @@ def _pod_table(ws: Worksheet, *, title_cell: str, header_row: int,
     return first + len(rows) - 1
 
 
-def _build_summary(ws: Worksheet, data: ReportData, deal_last: int) -> None:
+def _build_summary(ws: Worksheet, data: ReportData, deal_last: int,
+                   cache: FormulaCache | None = None) -> None:
+    cache = cache if cache is not None else FormulaCache()
     ws.sheet_view.showGridLines = False
     widths = {"A": 2, "B": 24, "C": 11, "D": 13, "E": 15, "G": 3, "H": 24, "I": 9, "J": 15}
     for column, width in widths.items():
@@ -502,6 +531,10 @@ def _build_summary(ws: Worksheet, data: ReportData, deal_last: int) -> None:
          f"=SUMIF('Open Deals'!$E$2:$E${deal_last},\"{NEW_BUSINESS}\",'Open Deals'!$I$2:$I${deal_last})",
          ORANGE, GBP, INDIGO, INDIGO)
 
+    for coord, figure in (("B5", data.open_deal_count), ("D5", data.pipeline_gbp),
+                          ("H5", data.weighted_gbp), ("J5", data.new_business_gbp)):
+        cache.put(ws, coord, figure)
+
     _, stage_ref, prob_ref = _settings_refs(data)
     deals_col = lambda letter: f"'Open Deals'!${letter}$2:${letter}${deal_last}"  # noqa: E731
 
@@ -522,8 +555,15 @@ def _build_summary(ws: Worksheet, data: ReportData, deal_last: int) -> None:
         ]
         for i, stage in enumerate(data.stages)
     ]
+    by_stage = {row["stage"]: row for row in data.by_stage()}
+    stage_cached = [
+        [stage.name, by_stage.get(stage.name, {}).get("deals", 0), stage.probability,
+         by_stage.get(stage.name, {}).get("value_gbp", 0.0),
+         by_stage.get(stage.name, {}).get("weighted_gbp", 0.0)]
+        for stage in data.stages
+    ]
     stage_total = _table(
-        ws, title="Pipeline by stage", title_cell="B8",
+        ws, cache=cache, cached_rows=stage_cached, title="Pipeline by stage", title_cell="B8",
         columns=[("B", "Stage"), ("C", "Deals"), ("D", "Probability %"), ("E", "Value (£)"), ("F", "Weighted (£)")],
         rows=stage_rows, header_row=9, tint=ROW_TINT, total_label="Total",
         formats={"C": "General", "D": PCT, "E": GBP, "F": GBP},
@@ -532,8 +572,15 @@ def _build_summary(ws: Worksheet, data: ReportData, deal_last: int) -> None:
         [name, count("C", f"H{10 + i}"), total("C", f"H{10 + i}", "I"), total("C", f"H{10 + i}", "K")]
         for i, name in enumerate(data.account_owners)
     ]
+    by_owner = {row["name"]: row for row in data.by_owner()}
+    owner_cached = [
+        [name, by_owner.get(name, {}).get("deals", 0),
+         by_owner.get(name, {}).get("value_gbp", 0.0),
+         by_owner.get(name, {}).get("weighted_gbp", 0.0)]
+        for name in data.account_owners
+    ]
     owner_total = _table(
-        ws, title="Pipeline by Account Owner", title_cell="H8",
+        ws, cache=cache, cached_rows=owner_cached, title="Pipeline by Account Owner", title_cell="H8",
         columns=[("H", "Account Owner"), ("I", "Deals"), ("J", "Value (£)"), ("K", "Weighted (£)")],
         rows=owner_rows, header_row=9, tint=ROW_TINT, total_label="Total",
         formats={"I": "General", "J": GBP, "K": GBP},
@@ -549,8 +596,15 @@ def _build_summary(ws: Worksheet, data: ReportData, deal_last: int) -> None:
          total("P", f"H{header2 + 1 + i}", "K")]
         for i, name in enumerate(data.industries)
     ]
+    by_industry = {row["name"]: row for row in data.by_industry()}
+    industry_cached = [
+        [name, by_industry.get(name, {}).get("deals", 0),
+         by_industry.get(name, {}).get("value_gbp", 0.0),
+         by_industry.get(name, {}).get("weighted_gbp", 0.0)]
+        for name in data.industries
+    ]
     industry_total = _table(
-        ws, title="Pipeline by industry", title_cell=f"H{header2 - 1}",
+        ws, cache=cache, cached_rows=industry_cached, title="Pipeline by industry", title_cell=f"H{header2 - 1}",
         columns=[("H", "Industry"), ("I", "Deals"), ("J", "Value (£)"), ("K", "Weighted (£)")],
         rows=industry_rows, header_row=header2, tint=None, total_label="Total",
         formats={"I": "General", "J": GBP, "K": GBP},
@@ -624,3 +678,80 @@ def _bar_chart(ws: Worksheet, *, title: str, colour: str, cats: Reference, vals:
     chart.y_axis.delete = True
     chart.y_axis.majorGridlines = None
     return chart
+
+
+# -- cached formula results -------------------------------------------------
+class FormulaCache(dict):
+    """The computed result of every formula the workbook writes.
+
+    openpyxl stores a formula with no cached result, so a reader that does not
+    calculate shows the cell as blank or zero. Excel and Sheets recalculate on
+    open and never notice; iPhone Mail and Quick Look do not, which is how a
+    GBP 7m pipeline came to read as GBP 0 on a phone.
+    """
+
+    def put(self, ws: Worksheet, coord: str, value) -> None:
+        if value is not None:
+            self[(ws.title, coord)] = value
+
+
+_SS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+_PR = "http://schemas.openxmlformats.org/package/2006/relationships"
+_DOC = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+
+
+def _sheet_paths(archive: zipfile.ZipFile) -> dict[str, str]:
+    """Sheet name -> the part inside the workbook that holds it."""
+    rels = ElementTree.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
+    targets = {
+        rel.get("Id"): rel.get("Target").lstrip("/")
+        for rel in rels.findall(f"{{{_PR}}}Relationship")
+    }
+    book = ElementTree.fromstring(archive.read("xl/workbook.xml"))
+    paths: dict[str, str] = {}
+    for sheet in book.find(f"{{{_SS}}}sheets"):
+        target = targets.get(sheet.get(f"{{{_DOC}}}id"), "")
+        if target:
+            paths[sheet.get("name")] = target if target.startswith("xl/") else f"xl/{target}"
+    return paths
+
+
+def _inject_cached_values(buffer: BytesIO, cache: FormulaCache) -> BytesIO:
+    """Write each formula's result into the saved workbook."""
+    if not cache:
+        return buffer
+    buffer.seek(0)
+    source = zipfile.ZipFile(buffer)
+    paths = _sheet_paths(source)
+    rewritten: dict[str, bytes] = {}
+
+    ElementTree.register_namespace("", _SS)
+    for name, path in paths.items():
+        wanted = {coord: value for (sheet, coord), value in cache.items() if sheet == name}
+        if not wanted or path not in source.namelist():
+            continue
+        root = ElementTree.fromstring(source.read(path))
+        for cell in root.iter(f"{{{_SS}}}c"):
+            if cell.find(f"{{{_SS}}}f") is None:
+                continue
+            value = wanted.get(cell.get("r"))
+            if value is None:
+                continue
+            for existing in cell.findall(f"{{{_SS}}}v"):
+                cell.remove(existing)
+            holder = ElementTree.SubElement(cell, f"{{{_SS}}}v")
+            if isinstance(value, str):
+                cell.set("t", "str")
+                holder.text = value
+            else:
+                cell.attrib.pop("t", None)
+                holder.text = repr(round(float(value), 10))
+        rewritten[path] = ElementTree.tostring(root, xml_declaration=True, encoding="UTF-8")
+
+    out = BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as target:
+        for item in source.infolist():
+            target.writestr(item, rewritten.get(item.filename) or source.read(item.filename))
+    source.close()
+    out.seek(0)
+    return out
