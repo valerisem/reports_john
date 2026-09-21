@@ -1,5 +1,5 @@
 {%- macro cell_label() -%}font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;{%- endmacro -%}
-{%- macro rule(top=12) -%}<table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0" style="margin:{{ top }}px auto 0;"><tr><td width="48" height="4" bgcolor="#e91e8c" style="width:48px;height:4px;font-size:0;line-height:0;background-color:#e91e8c;background-image:linear-gradient(90deg,#e91e8c,#7c3aed);border-radius:4px;">&nbsp;</td></tr></table>{%- endmacro -%}
+{%- macro rule(top=12) -%}<table role="presentation" width="48" align="center" cellpadding="0" cellspacing="0" border="0" style="width:48px;margin:{{ top }}px auto 0;border-collapse:collapse;"><tr><td width="48" height="4" bgcolor="#e91e8c" style="width:48px;min-width:48px;height:4px;font-size:4px;line-height:4px;background-color:#e91e8c;background-image:linear-gradient(90deg,#e91e8c,#7c3aed);border-radius:4px;">&#8203;</td></tr></table>{%- endmacro -%}
 <!doctype html>
 <html lang="en">
 <head>
@@ -21,6 +21,18 @@ body{margin:0;padding:0;-webkit-text-size-adjust:100%;}
  .lab{width:110px!important;font-size:13px!important;}
  .hero{padding:130px 10px {{ 170 if footer_image_url else 0 }}px!important;}
  .sh{font-size:21px!important;line-height:26px!important;}
+ /* Three pods of head shots need ~530px; a phone has 320. The podium is
+    swapped for a stacked list rather than scaled down to illegibility. */
+ .lbwide{display:none!important;max-height:0!important;overflow:hidden!important;}
+ .lbnarrow{display:block!important;max-height:none!important;overflow:visible!important;font-size:inherit!important;line-height:inherit!important;}
+ .pod{padding-left:2px!important;padding-right:2px!important;}
+ .podname{font-size:10px!important;line-height:13px!important;}
+ .podtotal{font-size:16px!important;line-height:20px!important;letter-spacing:-0.2px!important;}
+ .podsub{font-size:10px!important;line-height:14px!important;}
+ .podhead{height:34px!important;}
+ .mgrhead{height:30px!important;}
+ .mgrtext{font-size:10px!important;line-height:13px!important;}
+ .mgrcell{padding-left:1px!important;padding-right:1px!important;}
  .h1{font-size:28px!important;line-height:33px!important;}
 }
 </style>
@@ -88,25 +100,26 @@ body{margin:0;padding:0;-webkit-text-size-adjust:100%;}
 {%- if leaderboard.entries %}
 <tr><td class="pad" style="padding:52px 40px 0;"><div class="sh" style="{{ cell_label() }}font-size:24px;line-height:30px;font-weight:700;color:#15141f;letter-spacing:-0.3px;text-align:center;">{{ leaderboard.heading }}</div>
 {{ rule() }}</td></tr>
+<tr><td class="lbwide" style="padding:0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 <tr><td class="pad" style="padding:26px 40px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
 {%- for entry in leaderboard.entries %}
-<td width="33%" align="center" valign="top" style="padding:0 6px;text-align:center;">
-<div style="{{ cell_label() }}font-size:11px;line-height:15px;font-weight:700;color:#6b6a75;">{{ entry.name }}&rsquo;s pod</div>
-<div style="{{ cell_label() }}font-size:22px;line-height:27px;font-weight:700;color:#15141f;letter-spacing:-0.4px;padding-top:2px;">{{ entry.total }}</div>
-<div style="{{ cell_label() }}font-size:12px;line-height:16px;color:#6b6a75;">{{ entry.deals }} deal{{ 's' if entry.deals != 1 else '' }}</div>
+<td class="pod" width="33%" align="center" valign="top" style="padding:0 6px;text-align:center;">
+<div class="podname" style="{{ cell_label() }}font-size:11px;line-height:15px;font-weight:700;color:#6b6a75;">{{ entry.name }}&rsquo;s pod</div>
+<div class="podtotal" style="{{ cell_label() }}font-size:22px;line-height:27px;font-weight:700;color:#15141f;letter-spacing:-0.4px;padding-top:2px;">{{ entry.total }}</div>
+<div class="podsub" style="{{ cell_label() }}font-size:12px;line-height:16px;color:#6b6a75;">{{ entry.deals }} deal{{ 's' if entry.deals != 1 else '' }}</div>
 </td>
 {%- endfor %}
 </tr></table></td></tr>
 <tr><td class="pad" style="padding:14px 40px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
 {%- for entry in leaderboard.entries %}
-<td width="33%" align="center" valign="bottom" style="padding:0 6px;text-align:center;">
+<td class="pod" width="33%" align="center" valign="bottom" style="padding:0 6px;text-align:center;">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
 {%- if entry.photo %}
-<tr><td align="center" style="padding:0 0 4px;"><img src="{{ entry.photo }}" height="46" alt="{{ entry.name }}" style="display:block;height:46px;width:auto;border:0;margin:0 auto;"></td></tr>
+<tr><td align="center" style="padding:0 0 4px;"><img class="podhead" src="{{ entry.photo }}" height="46" alt="{{ entry.name }}" style="display:block;height:46px;width:auto;border:0;margin:0 auto;"></td></tr>
 {%- endif %}
-<tr><td align="center" style="{{ cell_label() }}font-size:13px;line-height:17px;color:#2b2a35;">{{ entry.name }}</td></tr>
-<tr><td align="center" style="{{ cell_label() }}font-size:12px;line-height:16px;color:#6b6a75;padding-top:2px;white-space:nowrap;"><span style="font-weight:700;color:#2b2a35;">{{ entry.direct }}</span> ({{ entry.direct_percent }}% self-managed)</td></tr>
-{%- if entry.ytd %}<tr><td align="center" style="{{ cell_label() }}font-size:11px;line-height:15px;font-style:italic;color:#9a99a5;white-space:nowrap;">{{ entry.ytd }} won YTD</td></tr>{% endif %}
+<tr><td align="center" class="podsub" style="{{ cell_label() }}font-size:13px;line-height:17px;color:#2b2a35;">{{ entry.name }}</td></tr>
+<tr><td align="center" style="{{ cell_label() }}font-size:12px;line-height:16px;color:#6b6a75;padding-top:2px;" class="mgrtext"><span style="font-weight:700;color:#2b2a35;">{{ entry.direct }}</span> ({{ entry.direct_percent }}% self-managed)</td></tr>
+{%- if entry.ytd %}<tr><td align="center" style="{{ cell_label() }}font-size:11px;line-height:15px;font-style:italic;color:#9a99a5;" class="mgrtext">{{ entry.ytd }} won YTD</td></tr>{% endif %}
 <tr><td align="center" style="padding-top:10px;"><table role="presentation" width="56" cellpadding="0" cellspacing="0" border="0" align="center" style="width:56px;margin:0 auto;"><tr><td width="56" height="{{ entry.height }}" bgcolor="{{ entry.colour }}" align="center" valign="top" style="width:56px;height:{{ entry.height }}px;background-color:{{ entry.colour }};padding-top:10px;{{ cell_label() }}font-size:18px;line-height:22px;font-weight:700;color:{{ entry.numeral_colour }};">{{ entry.rank }}</td></tr></table></td></tr>
 </table>
 </td>
@@ -118,14 +131,14 @@ body{margin:0;padding:0;-webkit-text-size-adjust:100%;}
 {%- if entry.managers %}
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;"><tr>
 {%- for manager in entry.managers %}
-<td align="center" valign="bottom" style="padding:0 5px;text-align:center;">
+<td class="mgrcell" align="center" valign="bottom" style="padding:0 5px;text-align:center;">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
 {%- if manager.photo %}
-<tr><td align="center"><img src="{{ manager.photo }}" height="42" alt="{{ manager.name }}" style="display:block;height:42px;width:auto;border:0;margin:0 auto;"></td></tr>
+<tr><td align="center"><img class="mgrhead" src="{{ manager.photo }}" height="42" alt="{{ manager.name }}" style="display:block;height:42px;width:auto;border:0;margin:0 auto;"></td></tr>
 {%- endif %}
-<tr><td align="center" style="{{ cell_label() }}font-size:11px;line-height:15px;color:#2b2a35;padding-top:3px;white-space:nowrap;">{{ manager.name }}</td></tr>
-<tr><td align="center" style="{{ cell_label() }}font-size:11px;line-height:15px;font-weight:700;color:#15141f;">{{ manager.value }}</td></tr>
-{%- if manager.ytd %}<tr><td align="center" style="{{ cell_label() }}font-size:10px;line-height:14px;font-style:italic;color:#9a99a5;white-space:nowrap;">{{ manager.ytd }} YTD</td></tr>{% endif %}
+<tr><td align="center" style="{{ cell_label() }}font-size:11px;line-height:15px;color:#2b2a35;padding-top:3px;" class="mgrtext">{{ manager.name }}</td></tr>
+<tr><td align="center" style="{{ cell_label() }}font-size:11px;line-height:15px;font-weight:700;color:#15141f;" class="mgrtext">{{ manager.value }}</td></tr>
+{%- if manager.ytd %}<tr><td align="center" style="{{ cell_label() }}font-size:10px;line-height:14px;font-style:italic;color:#9a99a5;" class="mgrtext">{{ manager.ytd }} YTD</td></tr>{% endif %}
 <tr><td align="center" style="padding-top:6px;"><table role="presentation" width="32" cellpadding="0" cellspacing="0" border="0" align="center" style="width:32px;margin:0 auto;"><tr><td width="32" height="{{ manager.height }}" bgcolor="{{ entry.colour }}" style="width:32px;height:{{ manager.height }}px;background-color:{{ entry.colour }};font-size:0;line-height:0;">&nbsp;</td></tr></table></td></tr>
 </table>
 </td>
@@ -135,6 +148,34 @@ body{margin:0;padding:0;-webkit-text-size-adjust:100%;}
 </td>
 {%- endfor %}
 </tr></table></td></tr>
+</table></td></tr>
+<tr><td class="lbnarrow" style="display:none;max-height:0;overflow:hidden;mso-hide:all;padding:0;font-size:0;line-height:0;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+{%- for entry in leaderboard.entries %}
+<tr><td class="pad" style="padding:{{ 22 if loop.first else 26 }}px 40px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"{% if not loop.first %} style="border-top:1px solid #e7e5ec;"{% endif %}>
+<tr><td valign="top" width="58" style="padding:{{ 0 if loop.first else 18 }}px 12px 0 0;">{% if entry.photo %}<img src="{{ entry.photo }}" width="46" height="46" alt="{{ entry.name }}" style="display:block;width:46px;height:46px;border:0;">{% endif %}</td>
+<td valign="top" style="padding:{{ 0 if loop.first else 18 }}px 0 0;{{ cell_label() }}">
+<div style="font-size:11px;line-height:15px;font-weight:700;color:#6b6a75;">{{ entry.rank }}. {{ entry.name }}&rsquo;s pod</div>
+<div style="font-size:20px;line-height:25px;font-weight:700;color:#15141f;letter-spacing:-0.3px;">{{ entry.total }}<span style="font-size:12px;font-weight:400;color:#6b6a75;">&nbsp;&middot; {{ entry.deals }} deal{{ 's' if entry.deals != 1 else '' }}</span></div>
+<div style="font-size:12px;line-height:17px;color:#6b6a75;"><span style="font-weight:700;color:#2b2a35;">{{ entry.direct }}</span> ({{ entry.direct_percent }}% self-managed)</div>
+{%- if entry.ytd %}<div style="font-size:11px;line-height:16px;font-style:italic;color:#9a99a5;">{{ entry.ytd }} won YTD</div>{% endif %}
+</td></tr>
+<tr><td colspan="2" style="padding:8px 0 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+<td width="{{ entry.bar_percent }}%" height="12" bgcolor="{{ entry.colour }}" style="height:12px;background-color:{{ entry.colour }};font-size:0;line-height:0;border-radius:6px;">&#8203;</td>
+{%- if entry.bar_percent < 100 %}<td width="{{ 100 - entry.bar_percent }}%" style="font-size:0;line-height:0;">&#8203;</td>{% endif %}
+</tr></table></td></tr>
+{%- for manager in entry.managers %}
+<tr><td colspan="2" style="padding:10px 0 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+<td valign="middle" width="34" style="padding:0 10px 0 0;">{% if manager.photo %}<img src="{{ manager.photo }}" width="30" height="30" alt="{{ manager.name }}" style="display:block;width:30px;height:30px;border:0;">{% endif %}</td>
+<td valign="middle" style="{{ cell_label() }}font-size:12px;line-height:16px;color:#2b2a35;">{{ manager.name }}{% if manager.ytd %}<span style="font-size:11px;font-style:italic;color:#9a99a5;">&nbsp;&middot; {{ manager.ytd }} YTD</span>{% endif %}</td>
+<td valign="middle" align="right" style="{{ cell_label() }}font-size:12px;line-height:16px;font-weight:700;color:#15141f;">{{ manager.value }}</td>
+</tr></table></td></tr>
+{%- endfor %}
+</table></td></tr>
+{%- endfor %}
+</table>
+</td></tr>
+
 {%- endif %}
 
 {%- for section in bar_sections %}

@@ -166,6 +166,9 @@ def _leaderboard(owner_rows: list[dict], pod_rows: list[dict],
                 "height": round(
                     PODIUM_MIN_PX + (row["weighted_gbp"] / top) * PODIUM_RANGE_PX
                 ),
+                # The phone layout lays the same figures out as horizontal
+                # bars, which need a percentage rather than a pixel height.
+                "bar_percent": bar_percent(row["weighted_gbp"], top),
                 "photo": _photo(row["name"], photo_template),
                 # Won so far this year by the same person, so the podium shows
                 # what landed beside what is still only forecast.
@@ -177,6 +180,7 @@ def _leaderboard(owner_rows: list[dict], pod_rows: list[dict],
                         "height": round(
                             MGR_MIN_PX + (r["weighted_gbp"] / am_top) * MGR_RANGE_PX
                         ),
+                        "bar_percent": bar_percent(r["weighted_gbp"], am_top),
                         "photo": _photo(r["manager"], photo_template),
                         "ytd": _won_label(data, "ytd_for_manager", r["manager"]),
                     }
