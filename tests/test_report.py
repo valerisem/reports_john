@@ -839,3 +839,79 @@ def test_a_missing_year_to_date_figure_is_explained():
 def test_no_year_to_date_note_when_nothing_was_won(data):
     html = render_email(data, title="t", greeting_name="John", sender_name="Valeria")
     assert "No figure means none won yet." not in html
+
+
+# -- pipeline trend in the workbook ----------------------------------------
+import datetime as _date_mod
+from app.pipeline_trend import Snapshot
+
+TREND = [
+    Snapshot("1 year ago  (5 Oct 2025)", _dt.date(2025, 10, 5), 63, 3_635_076.35, 2_328_874.58),
+    Snapshot("6 months ago  (5 Apr 2026)", _dt.date(2026, 4, 5), 104, 5_694_461.22, 3_539_696.58),
+    Snapshot("3 months ago  (5 Jul 2026)", _dt.date(2026, 7, 5), 131, 7_543_184.35, 4_523_751.62),
+]
+
+
+@pytest.fixture(scope="module")
+def trend_workbook():
+    data = build_report(**fixture.load(), trend=TREND)
+    return openpyxl.load_workbook(io.BytesIO(build_workbook(data).getvalue()))
+
+
+def _trend_rows(ws):
+    for r in range(1, ws.max_row + 1):
+        if ws[f"H{r}"].value == "Snapshot":
+            return r
+    raise AssertionError("trend block not found")
+
+
+def test_the_trend_block_lists_three_snapshots_and_now(trend_workbook):
+    ws = trend_workbook["Summary"]
+    header = _trend_rows(ws)
+    assert [ws[f"H{header + i}"].value for i in (1, 2, 3)] == [s.label for s in TREND]
+    assert [ws[f"I{header + i}"].value for i in (1, 2, 3)] == [63, 104, 131]
+    assert str(ws[f"H{header + 4}"].value).startswith("Now")
+
+
+def test_now_reads_the_live_kpis_rather_than_a_copy(trend_workbook):
+    """So the last row can never drift from the rest of the sheet."""
+    ws = trend_workbook["Summary"]
+    header = _trend_rows(ws)
+    assert ws[f"I{header + 4}"].value == "=B5"
+    assert ws[f"J{header + 4}"].value == "=D5"
+    assert ws[f"K{header + 4}"].value == "=H5"
+
+
+def test_the_trend_adds_two_charts(trend_workbook):
+    titles = []
+    for chart in trend_workbook["Summary"]._charts:
+        try:
+            titles.append(chart.title.tx.rich.p[0].r[0].t)
+        except Exception:  # noqa: BLE001
+            titles.append(None)
+    assert "Open deals: trend" in titles
+    assert "Weighted value (£): trend" in titles
+    assert len(trend_workbook["Summary"]._charts) == 4
+
+
+def test_the_trend_charts_cover_all_four_points(trend_workbook):
+    ws = trend_workbook["Summary"]
+    header = _trend_rows(ws)
+    for chart in ws._charts:
+        ref = chart.series[0].val.numRef.f
+        if ":" in ref and chart.type == "col":
+            assert ref.endswith(f"${header + 4}"), ref
+            assert f"${header + 1}:" in ref, ref
+
+
+def test_the_trend_keeps_the_workbook_small(data):
+    """Only the summary rows go in; the deal history that built them does not."""
+    plain = len(build_workbook(data).getvalue())
+    with_trend = len(build_workbook(build_report(**fixture.load(), trend=TREND)).getvalue())
+    assert with_trend - plain < 20_000
+
+
+def test_a_report_without_a_trend_renders_as_before(workbook):
+    ws = workbook["Summary"]
+    assert len(ws._charts) == 2
+    assert all(ws[f"H{r}"].value != "Snapshot" for r in range(1, ws.max_row + 1))

@@ -8,6 +8,7 @@ from typing import Any, Iterable
 
 from .brand_history import BrandHistory
 from .campaign_finance import BrandFinance, CampaignFinanceSet, name_index
+from .pipeline_trend import Snapshot
 from .client_aliases import alias_map
 from .brands import Brand, is_placeholder, normalise_name, org_website, resolve_brands
 from .team_directory import TeamDirectory
@@ -126,6 +127,8 @@ class ReportData:
     # Delivered campaigns whose client could not be tied to a brand, so their
     # revenue and cost sit outside every margin shown.
     campaigns_unmatched: list[str] = field(default_factory=list)
+    # What the pipeline looked like a year, six and three months ago.
+    trend: list[Snapshot] = field(default_factory=list)
 
     # -- headline numbers --------------------------------------------------
     @property
@@ -457,6 +460,7 @@ def build_report(
     finance: CampaignFinanceSet | None = None,
     campaign_deal_orgs: dict[int, int] | None = None,
     client_aliases: dict[str, str] | None = None,
+    trend: list[Snapshot] | None = None,
 ) -> ReportData:
     directory = directory or TeamDirectory()
     history = history or BrandHistory()
@@ -727,4 +731,5 @@ def build_report(
         won_ytd=won_rows,
         financial_year_start=financial_year_start,
         campaigns_unmatched=sorted(set(unmatched_campaigns), key=str.lower),
+        trend=list(trend or []),
     )

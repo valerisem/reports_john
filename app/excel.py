@@ -34,6 +34,7 @@ GRID = "E2DDF0"
 WHITE = "FFFFFF"
 BLACK = "000000"
 CORAL = "F37A74"
+GREY = "6B6A75"
 
 STAGE_TINTS = {
     "Understand Need/Problem": ("ECE6F7", INDIGO),
@@ -630,7 +631,54 @@ def _build_summary(ws: Worksheet, data: ReportData, deal_last: int,
             formats={"C": "General", "D": GBP},
         )
 
-    charts_row = max(manager_total, industry_total, ytd_total) + 2
+    # Block 4 - what the pipeline looked like a year, six and three months ago.
+    # Only the four summary rows go in the file; the deal-level history that
+    # produced them stays out, so the workbook does not grow.
+    trend_last = 0
+    if data.trend:
+        header4 = max(manager_total, industry_total, ytd_total) + 3
+        ws[f"H{header4 - 1}"] = "Pipeline trend: 1 year, 6 months and 3 months ago vs now"
+        ws[f"H{header4 - 1}"].font = _font(size=13, bold=True, color=INDIGO)
+        ws.row_dimensions[header4 - 1].height = TITLE_ROW_HEIGHT
+        _header_row(ws, header4, [("H", "Snapshot"), ("I", "Open deals"),
+                                  ("J", "Value (£)"), ("K", "Weighted (£)")])
+        for offset, point in enumerate(data.trend):
+            row = header4 + 1 + offset
+            ws.row_dimensions[row].height = DATA_ROW_HEIGHT
+            for column, value, fmt in (
+                ("H", point.label, "General"), ("I", point.open_deals, INT),
+                ("J", round(point.value_gbp, 2), GBP), ("K", round(point.weighted_gbp, 2), GBP),
+            ):
+                cell = ws[f"{column}{row}"]
+                cell.value = value
+                _style_body(cell, number_format=fmt,
+                            align="center" if column == "I" else "general", tint=ROW_TINT)
+        # "Now" reads the live KPI tiles, so the last row can never drift from
+        # the rest of the sheet.
+        trend_last = header4 + 1 + len(data.trend)
+        ws.row_dimensions[trend_last].height = DATA_ROW_HEIGHT
+        for column, value, fmt in (
+            ("H", f"Now  ({data.report_date.strftime('%-d %b %Y')})", "General"),
+            ("I", "=B5", INT), ("J", "=D5", GBP), ("K", "=H5", GBP),
+        ):
+            cell = ws[f"{column}{trend_last}"]
+            cell.value = value
+            _style_body(cell, number_format=fmt, align="center" if column == "I" else "general",
+                        tint=TOTAL_TINT, bold=True, color=INDIGO)
+        cache.put(ws, f"I{trend_last}", data.open_deal_count)
+        cache.put(ws, f"J{trend_last}", round(data.pipeline_gbp, 2))
+        cache.put(ws, f"K{trend_last}", round(data.weighted_gbp, 2))
+
+        note_row = trend_last + 1
+        ws[f"H{note_row}"] = (
+            "Historic rows rebuilt from Pipedrive deal history: each deal's status, "
+            "stage and value as at end of that day, valued at the FX rates and stage "
+            "probabilities in Settings."
+        )
+        ws[f"H{note_row}"].font = _font(size=8, color=GREY)
+        trend_last = note_row
+
+    charts_row = max(manager_total, industry_total, ytd_total, trend_last) + 2
     ws[f"B{charts_row}"] = "Charts"
     ws[f"B{charts_row}"].font = _font(size=13, bold=True, color=INDIGO)
     ws.row_dimensions[charts_row].height = TITLE_ROW_HEIGHT
@@ -647,6 +695,42 @@ def _build_summary(ws: Worksheet, data: ReportData, deal_last: int,
     )
     ws.add_chart(stage_chart, f"B{charts_row + 1}")
     ws.add_chart(owner_chart, f"H{charts_row + 1}")
+
+    if data.trend:
+        first = charts_row - len(data.trend) - 2 - 1  # first trend row
+        last = first + len(data.trend)
+        deals_chart = _column_chart(
+            ws, title="Open deals: trend", colour=INDIGO,
+            cats=Reference(ws, min_col=8, min_row=first, max_row=last),
+            vals=Reference(ws, min_col=9, min_row=first, max_row=last),
+        )
+        weighted_chart = _column_chart(
+            ws, title="Weighted value (£): trend", colour=PINK,
+            cats=Reference(ws, min_col=8, min_row=first, max_row=last),
+            vals=Reference(ws, min_col=11, min_row=first, max_row=last),
+        )
+        ws.add_chart(deals_chart, f"B{charts_row + 17}")
+        ws.add_chart(weighted_chart, f"H{charts_row + 17}")
+
+
+def _column_chart(ws: Worksheet, *, title: str, colour: str, cats: Reference, vals: Reference) -> BarChart:
+    """Vertical bars, for a series that runs through time rather than a ranking."""
+    chart = BarChart()
+    chart.type = "col"
+    chart.grouping = "clustered"
+    chart.title = title
+    chart.legend = None
+    chart.add_data(vals, titles_from_data=False)
+    chart.set_categories(cats)
+    chart.gapWidth = 50
+    chart.width, chart.height = 15, 7.5
+    chart.y_axis.delete = True
+    chart.dLbls = DataLabelList()
+    chart.dLbls.showVal = True
+    series = chart.series[0]
+    series.graphicalProperties.solidFill = colour
+    series.graphicalProperties.line = LineProperties(noFill=True)
+    return chart
 
 
 def _bar_chart(ws: Worksheet, *, title: str, colour: str, cats: Reference, vals: Reference) -> BarChart:

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from . import brand_history, campaign_finance, email_html, excel, fx, mailer, team_directory
+from . import brand_history, campaign_finance, email_html, excel, fx, mailer, pipeline_trend, team_directory
 from .client_aliases import alias_map
 from .config import Settings
 from .model import ReportData, build_report
@@ -35,6 +35,31 @@ def today_in(timezone: str) -> date:
         log.warning("Unknown timezone %r; falling back to UTC", timezone)
         return datetime.utcnow().date()
 
+
+
+def _collect_trend(settings: Settings, client: PipedriveClient, report_date: date,
+                   rates: dict[str, float], stages_payload: list[dict]):
+    """Snapshots of the pipeline a year, six and three months ago.
+
+    One request per deal for its change history, so this is the slowest part of
+    a run. It is also the most expendable: a failure costs the trend block, not
+    the report, so nothing here is allowed to raise.
+    """
+    if not settings.show_trend:
+        return []
+    try:
+        deals = client.deals_for_history(settings.pipedrive_pipeline_id)
+        changelogs = client.changelogs(
+            [deal["id"] for deal in deals if deal.get("id") is not None],
+            workers=settings.trend_workers,
+        )
+        return pipeline_trend.build_trend(
+            report_date=report_date, deals=deals, changelogs=changelogs,
+            rates=rates, stages_payload=stages_payload,
+        )
+    except Exception as exc:  # noqa: BLE001 - the trend is never worth a failed send
+        log.warning("Pipeline trend could not be built: %s", exc)
+        return []
 
 def collect(settings: Settings, report_date: date | None = None) -> ReportData:
     """Fetch everything the report needs from Pipedrive."""
@@ -73,6 +98,8 @@ def collect(settings: Settings, report_date: date | None = None) -> ReportData:
         campaign_deal_orgs = (
             client.deal_orgs(set(finance.by_deal)) if finance.loaded else {}
         )
+        stages_payload = client.stages(pipeline_id)
+        trend = _collect_trend(settings, client, report_date, rates, stages_payload)
         fy_start = settings.financial_year_start(report_date)
         won_payload = client.won_deals(fy_start, pipeline_id) if settings.show_ytd else []
 
@@ -80,7 +107,7 @@ def collect(settings: Settings, report_date: date | None = None) -> ReportData:
             report_date=report_date,
             rates=rates,
             rates_are_live=live,
-            stages_payload=client.stages(pipeline_id),
+            stages_payload=stages_payload,
             deals_payload=deals,
             orgs=all_orgs,
             persons=client.persons(person_ids),
@@ -95,6 +122,7 @@ def collect(settings: Settings, report_date: date | None = None) -> ReportData:
             finance=finance,
             campaign_deal_orgs=campaign_deal_orgs,
             client_aliases=alias_map(settings.client_aliases),
+            trend=trend,
         )
 
 

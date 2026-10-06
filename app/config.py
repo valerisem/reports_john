@@ -127,6 +127,10 @@ class Settings(BaseSettings):
     # Supabase client names to point at a Pipedrive brand by hand, e.g.
     # "Match.com LLC = Match Group; Rocky Road Games = Rocky Road".
     client_aliases: str = ""
+    # The pipeline trend reads every deal's change history - roughly one
+    # request per deal - so it can be switched off if it ever costs too much.
+    show_trend: bool = True
+    trend_workers: int = 4
 
     # --- Web ---------------------------------------------------------------
     port: int = 8000

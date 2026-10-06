@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime
 from typing import Any, Iterator
 
@@ -165,6 +166,61 @@ class PipedriveClient:
                 if deal.get("org_id"):
                     mapping[deal["id"]] = deal["org_id"]
         return mapping
+
+    def deals_for_history(self, pipeline_id: int | None = None) -> list[dict]:
+        """Every deal the history needs, deleted ones included.
+
+        A deal deleted in September was still open in July, so leaving it out
+        would understate every snapshot before its deletion.
+        """
+        deals: dict[int, dict] = {}
+        for status in ("all_not_deleted", "deleted"):
+            params: dict[str, Any] = {"status": status}
+            if pipeline_id:
+                params["pipeline_id"] = pipeline_id
+            try:
+                for deal in self._paginate_v1("/v1/deals", params):
+                    if deal.get("id") is not None:
+                        deals[deal["id"]] = deal
+            except PipedriveError as exc:
+                if status == "deleted":
+                    log.warning("Deleted deals unavailable for the trend: %s", exc)
+                    continue
+                raise
+        return list(deals.values())
+
+    def deal_changelog(self, deal_id: int) -> list[dict]:
+        """Every logged field change on one deal, oldest first."""
+        out: list[dict] = []
+        cursor: str | None = None
+        while True:
+            params: dict[str, Any] = {"limit": 500}
+            if cursor:
+                params["cursor"] = cursor
+            payload = self._get(f"/v1/deals/{deal_id}/changelog", params)
+            out.extend(payload.get("data") or [])
+            cursor = (payload.get("additional_data") or {}).get("next_cursor")
+            if not cursor:
+                return out
+
+    def changelogs(self, deal_ids: list[int], workers: int = 4) -> dict[int, list[dict]]:
+        """Changelogs for many deals at once.
+
+        One request per deal, so this is the slow part of the trend. Four
+        workers keeps it inside Pipedrive's rate limit and finishes a few
+        hundred deals in a couple of minutes.
+        """
+        out: dict[int, list[dict]] = {}
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(self.deal_changelog, i): i for i in deal_ids}
+            for future in as_completed(futures):
+                deal_id = futures[future]
+                try:
+                    out[deal_id] = future.result()
+                except PipedriveError as exc:
+                    log.warning("Changelog for deal %s unavailable: %s", deal_id, exc)
+                    out[deal_id] = []
+        return out
 
     def won_deal_org_ids(self, org_ids: set[int]) -> set[int]:
         """Orgs with at least one won deal -> 'Existing client'.
