@@ -90,7 +90,7 @@ def _collect_progress(settings: Settings, client: PipedriveClient, data: ReportD
             win_rate_weeks=window,
             clients=progress.big_clients(
                 won, report_date,
-                {b.name: (b.open_deals, b.weighted_gbp) for b in data.brands},
+                {b.brand_key: (b.open_deals, b.weighted_gbp) for b in data.brands if b.brand_key},
                 settings.big_client_count,
             ),
             weeks_shown=weeks_shown,

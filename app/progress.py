@@ -211,6 +211,7 @@ def win_rate(won: list[Closed], lost: list[Closed], on: date, weeks: int) -> Win
 # -- big clients -----------------------------------------------------------
 @dataclass
 class BigClient:
+    brand_key: str
     name: str
     won_gbp: float  # last 12 months
     programmes: int  # deals won in the last 12 months
@@ -221,6 +222,7 @@ class BigClient:
 
 def big_clients(won: list[Closed], report_date: date, open_by_brand: dict[str, tuple[int, float]],
                 limit: int) -> list[BigClient]:
+    """``open_by_brand`` is keyed by brand key: what each brand has open now."""
     """The clients that won us the most over the last year, biggest first."""
     year_ago = end_of(months_before(report_date, 12))
     two_years_ago = end_of(months_before(report_date, 24))
@@ -229,7 +231,7 @@ def big_clients(won: list[Closed], report_date: date, open_by_brand: dict[str, t
     for c in won:
         if c.on > end or c.on <= two_years_ago:
             continue
-        row = rows.setdefault(c.brand_key, BigClient(c.brand, 0.0, 0, 0, 0, 0.0))
+        row = rows.setdefault(c.brand_key, BigClient(c.brand_key, c.brand, 0.0, 0, 0, 0, 0.0))
         if c.on > year_ago:
             row.won_gbp += c.value_gbp
             row.programmes += 1
@@ -238,7 +240,7 @@ def big_clients(won: list[Closed], report_date: date, open_by_brand: dict[str, t
     ranked = sorted((r for r in rows.values() if r.won_gbp > 0),
                     key=lambda r: (-r.won_gbp, r.name.lower()))[:limit]
     for row in ranked:
-        row.open_deals, row.open_weighted_gbp = open_by_brand.get(row.name, (0, 0.0))
+        row.open_deals, row.open_weighted_gbp = open_by_brand.get(row.brand_key, (0, 0.0))
     return ranked
 
 
@@ -274,10 +276,8 @@ class Progress:
 
     @property
     def last_week(self) -> WeekPoint | None:
-        """The finished week at least seven days before the report."""
-        cutoff = self.now.week_ending - timedelta(days=7)
-        earlier = [w for w in self.weeks if w.week_ending <= cutoff]
-        return earlier[-1] if earlier else None
+        """The latest finished week: last Sunday, whatever day the report runs."""
+        return self.weeks[-1] if self.weeks else None
 
 
 def build_flow(*, since: date, report_date: date, deals: list[dict], won: list[Closed],

@@ -143,7 +143,7 @@ def test_big_clients_rank_by_last_years_wins_and_show_their_pipeline():
         won(2, 2, "2025-08-01 10:00:00", 5000),   # the year before
         won(3, 1, "2026-09-01 10:00:00", 2000),
     ], "won_time")
-    clients = progress.big_clients(w, dt.date(2026, 10, 14), {"OldCo": (2, 800.0)}, limit=5)
+    clients = progress.big_clients(w, dt.date(2026, 10, 14), {"oldco.com": (2, 800.0)}, limit=5)
     assert [c.name for c in clients] == ["OldCo", "NewCo"]
     assert (clients[0].programmes, clients[0].programmes_before) == (1, 1)
     assert clients[0].open_deals == 2 and clients[1].open_deals == 0
@@ -161,8 +161,8 @@ def _progress():
     rates.append(progress.WinRate(report_date, 0.34, 3.4e4, 6.6e4))
     return progress.Progress(
         rates={"GBP": 1.0}, weeks=points, now=now, win_rates=rates, win_rate_weeks=13,
-        clients=[progress.BigClient("OldCo", 9e4, 3, 1, 0, 0.0),
-                 progress.BigClient("BigCo", 7e4, 2, 2, 1, 2e4)],
+        clients=[progress.BigClient("oldco.com", "OldCo", 9e4, 3, 1, 0, 0.0),
+                 progress.BigClient("bigco.com", "BigCo", 7e4, 2, 2, 1, 2e4)],
         flow=progress.Flow(since=weeks[-2], added=3, added_gbp=3e4, won=1, won_gbp=1e4),
     )
 
@@ -174,34 +174,52 @@ def data_with_progress():
     return data
 
 
-def test_the_section_answers_all_three_questions(data_with_progress):
+def test_each_question_gets_its_own_section(data_with_progress):
     html = render_email(data_with_progress, title="T", greeting_name="John", sender_name="V")
-    assert "How we&rsquo;re tracking" in html
     for question in ("Is the new-brand pipeline growing?", "Is the win rate holding?",
                      "Are our biggest clients committing to more?"):
         assert question in html
-    assert "Growing" in html            # 16 deals now against 14 a week ago
-    assert "Improving" in html          # 34% against 30%
     assert "1 of our top 2 clients has another programme in the pipeline" in html
     assert "Nothing in the pipeline" in html
-    # 26 history weeks plus today, in each of the three charts
-    assert html.count('valign="bottom" style="height:64px;') == 27 * 3
+    assert "Won, last 12 months" in html
+    # 26 history weeks plus today, in each of the two charts
+    assert html.count('valign="bottom" style="height:64px;') == 27 * 2
 
 
-def test_the_section_comes_before_the_brand_lists(data_with_progress):
+def test_no_verdict_labels_or_explanatory_notes(data_with_progress):
     html = render_email(data_with_progress, title="T", greeting_name="John", sender_name="V")
-    assert html.index("How we&rsquo;re tracking") < html.index("Top brands by weighted value")
+    for gone in ("How we", "Growing", "Holding", "Improving", "Recommitting",
+                 "Open deals \u00b7 peak", "Bars run oldest to newest", "Each week compared"):
+        assert gone not in html
 
 
-def test_without_progress_the_email_is_unchanged():
+def test_the_figures_sit_on_the_charts(data_with_progress):
+    """Where it started, last week and now - numbers, not sentences."""
+    html = render_email(data_with_progress, title="T", greeting_name="John", sender_name="V")
+    assert "22 Mar" in html and "13 Sep" in html and "Now" in html
+    assert "£55k" in html          # new-brand weighted value now
+    assert "34%" in html and "30%" in html
+
+
+def test_the_brand_lists_move_into_the_questions(data_with_progress):
+    html = render_email(data_with_progress, title="T", greeting_name="John", sender_name="V")
+    assert "Top brands by weighted value" not in html
+    assert "retained clients" not in html
+    pipeline = html.index("Is the new-brand pipeline growing?")
+    assert pipeline < html.index("New this week") < html.index("Is the win rate holding?")
+
+
+def test_without_progress_the_old_brand_lists_stay():
     data = build_report(**fixture.load())
-    assert "How we" not in render_email(data, title="T", greeting_name="John", sender_name="V")
+    html = render_email(data, title="T", greeting_name="John", sender_name="V")
+    assert "Is the win rate holding?" not in html
+    assert "Top 5 retained clients" in html
 
 
-def test_the_plain_text_version_carries_the_verdicts(data_with_progress):
+def test_the_plain_text_version_carries_the_figures(data_with_progress):
     text = plain_text_fallback(data_with_progress, "John", "V")
-    assert "Growing: 16 open deals with new brands" in text
-    assert "OldCo: £90k won" in text
+    assert "Now: £55k" in text
+    assert "OldCo: £90k won in the last 12 months" in text
 
 
 # -- wiring ----------------------------------------------------------------
@@ -248,7 +266,7 @@ def test_collect_progress_builds_the_whole_section(monkeypatch):
     assert len(result.win_rates) == 27
     assert [c.name for c in result.clients] == ["OldCo"]
     assert result.flow is not None
-    assert "How we&rsquo;re tracking" in render_email(
+    assert "Is the win rate holding?" in render_email(
         _with(data, result), title="T", greeting_name="J", sender_name="V")
 
 

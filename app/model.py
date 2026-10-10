@@ -129,6 +129,9 @@ class ReportData:
     campaigns_unmatched: list[str] = field(default_factory=list)
     # What the pipeline looked like a year, six and three months ago.
     trend: list[Snapshot] = field(default_factory=list)
+    # Delivered-campaign finance for every brand with campaigns, open deals
+    # or not, so a big client with nothing in the pipeline still has a margin.
+    finance_by_brand: dict[str, BrandFinance] = field(default_factory=dict)
     # Week-by-week progress for the email (app.progress.Progress), or None
     # when it is switched off or could not be built.
     progress: Any = None
@@ -734,5 +737,9 @@ def build_report(
         won_ytd=won_rows,
         financial_year_start=financial_year_start,
         campaigns_unmatched=sorted(set(unmatched_campaigns), key=str.lower),
+        finance_by_brand=(
+            {key: finance.roll_up(ids) for key, ids in deal_ids_by_brand_key.items()}
+            if finance.loaded else {}
+        ),
         trend=list(trend or []),
     )
