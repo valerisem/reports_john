@@ -150,75 +150,86 @@ def test_big_clients_rank_by_last_years_wins_and_show_their_pipeline():
 
 
 # -- the email -------------------------------------------------------------
+REPORT_DATE = dt.date(2026, 9, 17)
+
+
 def _progress():
-    report_date = dt.date(2026, 9, 17)
-    weeks = progress.week_endings(report_date, 30)
+    weeks = progress.week_endings(REPORT_DATE, progress.HISTORY_WEEKS)
     points = [WeekPoint(w, Tally(10 + i, {"GBP": 1e5}, {"GBP": 5e4}),
                         Tally(5 + i // 3, {"GBP": 4e4}, {"GBP": 2e4 + 1000 * i}))
               for i, w in enumerate(weeks)]
-    now = WeekPoint(report_date, Tally(40), Tally(16, {"GBP": 6e4}, {"GBP": 5.5e4}))
-    rates = [progress.WinRate(p.week_ending, 0.3, 3e4, 7e4) for p in points[-26:]]
-    rates.append(progress.WinRate(report_date, 0.34, 3.4e4, 6.6e4))
+    now = WeekPoint(REPORT_DATE, Tally(40), Tally(16, {"GBP": 6e4}, {"GBP": 8e4}))
+    marks = progress.checkpoints(REPORT_DATE)
+    rates = [progress.WinRate(on, r, 0, 0) for on, r in zip(marks, (0.56, 0.5, 0.45, 0.4))]
+    rates.append(progress.WinRate(REPORT_DATE, 0.36, 3.6e4, 6.4e4))
     return progress.Progress(
-        rates={"GBP": 1.0}, weeks=points, now=now, win_rates=rates, win_rate_weeks=13,
+        rates={"GBP": 1.0}, weeks=points, now=now, checkpoints=marks, win_rates=rates,
+        last_week_win_rate=progress.WinRate(weeks[-1], 0.37, 0, 0), win_rate_weeks=13,
         clients=[progress.BigClient("oldco.com", "OldCo", 9e4, 3, 1, 0, 0.0),
                  progress.BigClient("bigco.com", "BigCo", 7e4, 2, 2, 1, 2e4)],
-        flow=progress.Flow(since=weeks[-2], added=3, added_gbp=3e4, won=1, won_gbp=1e4),
     )
 
 
 @pytest.fixture(scope="module")
-def data_with_progress():
+def html_and_text():
     data = build_report(**fixture.load())
     data.progress = _progress()
-    return data
+    return (render_email(data, title="T", greeting_name="John", sender_name="V"),
+            plain_text_fallback(data, "John", "V"))
 
 
-def test_each_question_gets_its_own_section(data_with_progress):
-    html = render_email(data_with_progress, title="T", greeting_name="John", sender_name="V")
-    for question in ("Is the new-brand pipeline growing?", "Is the win rate holding?",
-                     "Are our biggest clients committing to more?"):
-        assert question in html
-    assert "1 of our top 2 clients has another programme in the pipeline" in html
-    assert "Nothing in the pipeline" in html
-    assert "Won, last 12 months" in html
-    # 26 history weeks plus today, in each of the two charts
-    assert html.count('valign="bottom" style="height:64px;') == 27 * 2
+def test_checkpoints_run_a_year_back_in_three_month_steps():
+    assert progress.checkpoints(dt.date(2026, 10, 10)) == [
+        dt.date(2025, 10, 10), dt.date(2026, 1, 10), dt.date(2026, 4, 10), dt.date(2026, 7, 10)]
 
 
-def test_no_verdict_labels_or_explanatory_notes(data_with_progress):
-    html = render_email(data_with_progress, title="T", greeting_name="John", sender_name="V")
-    for gone in ("How we", "Growing", "Holding", "Improving", "Recommitting",
-                 "Open deals \u00b7 peak", "Bars run oldest to newest", "Each week compared"):
+def test_sections_are_headed_plainly_in_order(html_and_text):
+    html, _ = html_and_text
+    titles = ["Win Rate", "New Brand Pipeline", "Biggest Clients"]
+    positions = [html.index(f">{t}</div>") for t in titles]
+    assert positions == sorted(positions)
+    assert "?" not in "".join(html[p - 300:p] for p in positions)
+    for gone in ("Is the", "How we", "Growing", "Holding", "Top brands by weighted value"):
         assert gone not in html
 
 
-def test_the_figures_sit_on_the_charts(data_with_progress):
-    """Where it started, last week and now - numbers, not sentences."""
-    html = render_email(data_with_progress, title="T", greeting_name="John", sender_name="V")
-    assert "22 Mar" in html and "13 Sep" in html and "Now" in html
-    assert "£55k" in html          # new-brand weighted value now
-    assert "34%" in html and "30%" in html
+def test_each_chart_shows_a_year_in_quarters_ending_today(html_and_text):
+    html, _ = html_and_text
+    for label in ("Sep 2025", "Dec 2025", "Mar 2026", "Jun 2026", "Today"):
+        assert html.count(f">{label}</td>") == 2  # win rate and pipeline
 
 
-def test_the_brand_lists_move_into_the_questions(data_with_progress):
-    html = render_email(data_with_progress, title="T", greeting_name="John", sender_name="V")
-    assert "Top brands by weighted value" not in html
-    assert "retained clients" not in html
-    pipeline = html.index("Is the new-brand pipeline growing?")
-    assert pipeline < html.index("New this week") < html.index("Is the win rate holding?")
+def test_each_section_says_what_it_means(html_and_text):
+    html, _ = html_and_text
+    assert ("Of the value of all deals closed in the last 13 weeks, we won 36%, "
+            "against 56% a year ago (down 1 point on last week).") in html
+    assert "Open deals with brands we have never won a deal with are worth £80k" in html
+    assert "on a year ago and up" in html
+    assert ("Our 2 biggest clients by value won in the last 12 months. 1 of them has another "
+            "programme in the pipeline; OldCo has nothing open.") in html
+
+
+def test_client_name_comes_before_margin_then_won(html_and_text):
+    html, _ = html_and_text
+    header = html.index(">Client</td>")
+    assert header < html.index(">Margin</td>") < html.index(">Won, last 12 months</td>")
+
+
+def test_new_this_week_sits_under_the_pipeline(html_and_text):
+    html, _ = html_and_text
+    assert html.index(">New Brand Pipeline<") < html.index("New this week") < html.index(">Biggest Clients<")
 
 
 def test_without_progress_the_old_brand_lists_stay():
     data = build_report(**fixture.load())
     html = render_email(data, title="T", greeting_name="John", sender_name="V")
-    assert "Is the win rate holding?" not in html
+    assert "Win Rate" not in html
     assert "Top 5 retained clients" in html
 
 
-def test_the_plain_text_version_carries_the_figures(data_with_progress):
-    text = plain_text_fallback(data_with_progress, "John", "V")
-    assert "Now: £55k" in text
+def test_the_plain_text_version_carries_the_figures(html_and_text):
+    _, text = html_and_text
+    assert "Today: 36%" in text and "Today: £80k" in text
     assert "OldCo: £90k won in the last 12 months" in text
 
 
@@ -263,10 +274,9 @@ def test_collect_progress_builds_the_whole_section(monkeypatch):
     assert len(saved) == progress.HISTORY_WEEKS == len(result.weeks)
     assert client.changelog_requests == 1          # only the deal edited inside the window
     assert result.now.new.deals == 1 and result.now.all.deals == 2
-    assert len(result.win_rates) == 27
+    assert len(result.win_rates) == 5 and result.last_week_win_rate is not None
     assert [c.name for c in result.clients] == ["OldCo"]
-    assert result.flow is not None
-    assert "Is the win rate holding?" in render_email(
+    assert ">Win Rate</div>" in render_email(
         _with(data, result), title="T", greeting_name="J", sender_name="V")
 
 

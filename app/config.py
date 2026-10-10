@@ -135,7 +135,6 @@ class Settings(BaseSettings):
     # clients, week by week. Finished weeks are cached in Supabase
     # (report_weekly_pipeline) so history is only rebuilt once.
     show_progress: bool = True
-    progress_weeks: int = 26
     win_rate_weeks: int = 13
     big_client_count: int = 5
 

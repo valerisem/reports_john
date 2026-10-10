@@ -24,20 +24,20 @@ palette, number formats, conditional formatting and charts as the template:
 Values stay as **live formulas**, not hard-coded numbers, so the recipient can
 re-sort, filter and audit the figures in Excel.
 
-**The email** — the newsletter design: headline stats, **How we're tracking**
-(below), top 5 retained clients and the new business by weighted value, the pod
-leaderboard, and pipeline by stage.
+**The email** — the newsletter design: headline stats, Win Rate, New Brand
+Pipeline and Biggest Clients (below), the pod leaderboard, and pipeline by stage.
 
-### How we're tracking
+### Win Rate, New Brand Pipeline, Biggest Clients
 
-Three questions, each answered with a verdict (▲ / ● / ▼), a one-line headline
-and a bar per week for the last 26 weeks plus today:
+Three sections under the headline numbers, each ending in a plain line on what
+it means. The two charts show a year in three-month steps, ending today; the
+summary line also says how the figure moved since last week.
 
-| Question | Measure |
+| Section | Measure |
 |---|---|
-| Is the new-brand pipeline growing? | Open deals and weighted value for brands we have never won a deal with, at the end of each week (Sunday). Compared with the finished week at least seven days back, plus what came in and went out since |
-| Is the win rate holding? | Won value ÷ (won + lost value) over a rolling 13 weeks |
-| Are our biggest clients committing to more? | Top 5 clients by value won in the last 12 months: programmes (won deals) this year vs the year before, and whether anything is open now |
+| Win Rate | Won value ÷ (won + lost value) over a rolling 13 weeks |
+| New Brand Pipeline | Weighted value of open deals with brands we have never won a deal with. "New this week" sits underneath |
+| Biggest Clients | Top 5 clients by value won in the last 12 months: margin, programmes (won deals) against the year before, and what is open now |
 
 Past weeks are rebuilt from Pipedrive's deal change logs, which costs one
 request per deal. Each finished week is therefore saved in Supabase
@@ -52,8 +52,8 @@ Saved weeks keep the stage probabilities of the day they were worked out. After
 changing probabilities in Pipedrive, `delete from report_weekly_pipeline;` to
 rebuild them.
 
-`SHOW_PROGRESS=false` removes the section; `PROGRESS_WEEKS`, `WIN_RATE_WEEKS`
-and `BIG_CLIENT_COUNT` tune it.
+`SHOW_PROGRESS=false` removes the three sections and brings back the old
+brand lists; `WIN_RATE_WEEKS` and `BIG_CLIENT_COUNT` tune them.
 
 ---
 

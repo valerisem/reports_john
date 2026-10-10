@@ -55,8 +55,7 @@ def _collect_progress(settings: Settings, client: PipedriveClient, data: ReportD
         return None
     try:
         report_date = data.report_date
-        weeks_shown = max(1, settings.progress_weeks)
-        history_weeks = max(progress.HISTORY_WEEKS, weeks_shown)
+        history_weeks = progress.HISTORY_WEEKS
         probabilities = pipeline_trend.stage_probabilities(stages_payload)
         clock = progress.BrandClock(brands_by_org, orgs, won_payload)
         deals = client.deals_for_history(settings.pipedrive_pipeline_id)
@@ -72,7 +71,8 @@ def _collect_progress(settings: Settings, client: PipedriveClient, data: ReportD
 
         rates = data.rates
         window = settings.win_rate_weeks
-        lost_since = progress.week_endings(report_date, weeks_shown)[0] - timedelta(weeks=window + 1)
+        marks = progress.checkpoints(report_date)
+        lost_since = marks[0] - timedelta(weeks=window + 1)
         won = progress.closed_deals(won_payload, "won_time", rates, brands_by_org)
         lost = progress.closed_deals(
             client.lost_deals(lost_since, settings.pipedrive_pipeline_id),
@@ -83,24 +83,19 @@ def _collect_progress(settings: Settings, client: PipedriveClient, data: ReportD
             weeks=weeks,
             now=progress.now_point(report_date=report_date, deals=deals,
                                    probability_by_stage=probabilities, clock=clock),
-            win_rates=[
-                progress.win_rate(won, lost, week.week_ending, window)
-                for week in weeks[-weeks_shown:]
-            ] + [progress.win_rate(won, lost, report_date, window)],
+            checkpoints=marks,
+            win_rates=[progress.win_rate(won, lost, on, window) for on in marks + [report_date]],
+            last_week_win_rate=(
+                progress.win_rate(won, lost, weeks[-1].week_ending, window) if weeks else None
+            ),
             win_rate_weeks=window,
             clients=progress.big_clients(
                 won, report_date,
                 {b.brand_key: (b.open_deals, b.weighted_gbp) for b in data.brands if b.brand_key},
                 settings.big_client_count,
             ),
-            weeks_shown=weeks_shown,
             fresh_weeks=len(fresh),
         )
-        if result.last_week is not None:
-            result.flow = progress.build_flow(
-                since=result.last_week.week_ending, report_date=report_date, deals=deals,
-                won=won, lost=lost, clock=clock, rates=rates,
-            )
         return result
     except Exception as exc:  # noqa: BLE001 - never worth a failed send
         log.warning("Weekly progress could not be built: %s", exc)

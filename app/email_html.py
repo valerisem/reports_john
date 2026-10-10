@@ -248,71 +248,114 @@ def _finance_label(finance) -> str:
     return percent(finance.margin) + ("*" if finance.is_forecast else "")
 
 
-def _chart(values: list[float], dates: list, *, series: str, label: str,
+def _chart(points: list[tuple[str, float]], *, series: str,
            fmt: Callable[[float], str]) -> dict:
-    """Zero-based bars, one per week, the live position last and darkest.
+    """A handful of zero-based bars, each labelled with its value and date.
 
-    The figures sit on the chart itself: where the series started, last
-    week, and now.
+    Today's bar is drawn full strength; the earlier ones are a tint of it.
     """
     full, tint = SERIES[series]
-    peak = max(values, default=0)
+    peak = max((value for _, value in points), default=0)
     bars = []
-    for index, value in enumerate(values):
+    for index, (label, value) in enumerate(points):
+        latest = index == len(points) - 1
         height = round(CHART_PX * value / peak) if peak and value > 0 else 0
         bars.append({
+            "label": label,
+            "value": fmt(value),
             "height": max(height, 2) if value > 0 else 0,
-            "colour": full if index == len(values) - 1 else tint,
+            "colour": full if latest else tint,
+            "text": full if latest else "#2b2a35",
         })
-    marks = []
-    if len(values) > 2:
-        marks.append({"date": dates[-2].strftime("%-d %b"), "value": fmt(values[-2])})
-    marks.append({"date": "Now", "value": fmt(values[-1]) if values else "", "colour": full})
-    return {
-        "label": label,
-        "bars": bars,
-        "width": round(100 / len(values), 3) if values else 100,
-        "height": CHART_PX,
-        "start": {"date": dates[0].strftime("%-d %b"), "value": fmt(values[0])} if values else None,
-        "marks": marks,
-    }
+    return {"bars": bars, "width": round(100 / len(points), 3) if points else 100,
+            "height": CHART_PX}
+
+
+def _versus(now: float, before: float, fmt: Callable[[float], str], *, flat: float) -> str:
+    """'up 12%' / 'down £40k' / 'level' - which way a figure moved."""
+    gap = now - before
+    if abs(gap) < flat:
+        return "level"
+    return f"{'up' if gap > 0 else 'down'} {fmt(abs(gap))}"
 
 
 def _progress_section(data: ReportData, new_column: dict) -> dict | None:
-    """John's three questions, each answered by a chart or a list."""
+    """Win rate, new-brand pipeline and biggest clients, each with a line on what it means."""
     progress = data.progress
     if progress is None:
         return None
     rates = progress.rates
-    series = progress.shown + [progress.now]
-    dates = [p.week_ending for p in series]
+    labels = [on.strftime("%b %Y") for on in progress.checkpoints] + ["Today"]
 
+    # -- win rate ------------------------------------------------------------
+    win_rates = progress.win_rates
+    now_rate = win_rates[-1].rate
+    year_rate = win_rates[0].rate
+    week_rate = progress.last_week_win_rate.rate if progress.last_week_win_rate else None
+    pts = lambda x: _plural(round(x * 100), "point")
+    if now_rate is None:
+        summary = f"No deals were closed in the last {progress.win_rate_weeks} weeks."
+    else:
+        summary = (f"Of the value of all deals closed in the last {progress.win_rate_weeks} weeks, "
+                   f"we won {percent(now_rate)}")
+        if year_rate is not None:
+            summary += f", against {percent(year_rate)} a year ago"
+        if week_rate is not None:
+            summary += f" ({_versus(now_rate, week_rate, pts, flat=0.005)} on last week)"
+        summary += "."
+    win_rate = {
+        "title": "Win Rate",
+        "chart": _chart([(label, w.rate or 0.0) for label, w in zip(labels, win_rates)],
+                        series="purple", fmt=percent),
+        "summary": summary,
+    }
+
+    # -- new-brand pipeline --------------------------------------------------
+    values = []
+    for label, on in zip(labels, progress.checkpoints + [None]):
+        point = progress.now if on is None else progress.at(on)
+        if point is not None:
+            values.append((label, point.new.weighted_gbp(rates)))
+    weighted = progress.now.new.weighted_gbp(rates)
+    summary = (f"Open deals with brands we have never won a deal with are worth "
+               f"{compact_gbp(weighted)}, weighted by each deal\u2019s chance of closing")
+    year = progress.at(progress.checkpoints[0]) if progress.checkpoints else None
+    if year is not None and year.new.weighted_gbp(rates):
+        before = year.new.weighted_gbp(rates)
+        summary += f": {_versus(weighted, before, lambda x: percent(x / before), flat=before * 0.01)} on a year ago"
+        if progress.last_week is not None:
+            summary += (f" and {_versus(weighted, progress.last_week.new.weighted_gbp(rates), compact_gbp, flat=500)}"
+                        " on last week")
+    summary += "."
     pipeline = {
-        "question": "Is the new-brand pipeline growing?",
-        "chart": _chart([p.new.weighted_gbp(rates) for p in series], dates, series="pink",
-                        label="Weighted value of open deals with new brands",
-                        fmt=compact_gbp),
+        "title": "New Brand Pipeline",
+        "chart": _chart(values, series="pink", fmt=compact_gbp),
+        "summary": summary,
         "new_column": new_column,
     }
 
-    win_rates = progress.win_rates
-    win_rate = {
-        "question": "Is the win rate holding?",
-        "chart": _chart([w.rate or 0.0 for w in win_rates], [w.on for w in win_rates],
-                        series="purple", fmt=percent,
-                        label=f"Share of closed value won, rolling {progress.win_rate_weeks} weeks"),
-    }
-
+    # -- biggest clients -----------------------------------------------------
     clients = progress.clients
-    committed = sum(1 for c in clients if c.open_deals)
     finances = [data.finance_by_brand.get(c.brand_key) for c in clients]
+    idle = [c.name for c in clients if not c.open_deals]
+    if clients:
+        busy = len(clients) - len(idle)
+        summary = (f"Our {len(clients)} biggest clients by value won in the last 12 months. "
+                   f"{busy} of them {'has' if busy == 1 else 'have'} another programme "
+                   "in the pipeline")
+        if idle:
+            summary += f"; {', '.join(idle)} {'has' if len(idle) == 1 else 'have'} nothing open"
+        summary += "."
+        if any(_finance_label(f) for f in finances):
+            summary += " Margin is our average gross margin on their delivered campaigns"
+            if any(f and f.margin is not None and f.is_forecast for f in finances):
+                summary += " (* forecast: nothing delivered yet)"
+            summary += "."
+    else:
+        summary = "No deals were won in the last 12 months."
     big = {
-        "question": "Are our biggest clients committing to more?",
-        "headline": (
-            f"{committed} of our top {len(clients)} clients "
-            f"{'has' if committed == 1 else 'have'} another programme in the pipeline"
-            if clients else "No deals won in the last 12 months"
-        ),
+        "title": "Biggest Clients",
+        "summary": summary,
         "clients": [
             {
                 "name": c.name,
@@ -327,13 +370,8 @@ def _progress_section(data: ReportData, new_column: dict) -> dict | None:
             }
             for c, finance in zip(clients, finances)
         ],
-        "margin_note": (
-            "Margin is average gross margin on delivered campaigns."
-            + (" * means nothing delivered yet, so it is the forecast margin."
-               if any(f and f.margin is not None and f.is_forecast for f in finances) else "")
-        ) if any(_finance_label(f) for f in finances) else "",
     }
-    return {"pipeline": pipeline, "win_rate": win_rate, "big": big}
+    return {"sections": [win_rate, pipeline, big]}
 
 
 def render_email(
@@ -474,20 +512,18 @@ def plain_text_fallback(data: ReportData, greeting_name: str, sender_name: str) 
     ]
     section = _progress_section(data, {})
     if section:
-        for block in (section["pipeline"], section["win_rate"]):
-            chart = block["chart"]
-            points = [f"{chart['start']['date']}: {chart['start']['value']}"] + [
-                f"{m['date']}: {m['value']}" for m in chart["marks"]
+        for block in section["sections"]:
+            lines.append(block["title"])
+            if block.get("chart"):
+                lines.append("  " + ", ".join(f"{b['label']}: {b['value']}"
+                                              for b in block["chart"]["bars"]))
+            lines += [
+                f"  {c['name']}: {c['won']} won in the last 12 months"
+                + (f", margin {c['margin']}" if c["margin"] else "")
+                + f", {c['programmes']}, {c['open']}"
+                for c in block.get("clients", [])
             ]
-            lines += [block["question"], f"  {chart['label']}: " + ", ".join(points), ""]
-        big = section["big"]
-        lines += [big["question"], f"  {big['headline']}"]
-        lines += [
-            f"  {c['name']}: {c['won']} won in the last 12 months, {c['programmes']}, {c['open']}"
-            + (f", margin {c['margin']}" if c["margin"] else "")
-            for c in big["clients"]
-        ]
-        lines.append("")
+            lines += [f"  {block['summary']}", ""]
     lines += [
         "Weighted pipeline leaderboard",
     ]

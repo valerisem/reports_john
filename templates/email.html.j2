@@ -4,15 +4,17 @@
 <tr><td valign="top" style="border-top:1px solid #e7e5ec;padding:10px 12px 10px 0;{{ cell_label() }}font-size:15px;line-height:21px;color:#15141f;">{% if brand.url %}<a href="{{ brand.url }}" style="color:#15141f;text-decoration:none;">{{ brand.name }}</a>{% else %}{{ brand.name }}{% endif %}{% if brand.poc %}<div style="{{ cell_label() }}font-size:13px;line-height:18px;color:#6b6a75;padding-top:1px;">POC: {{ brand.poc }}{% if brand.poc_ytd %}<span style="color:#9a99a5;font-style:italic;">&nbsp;&middot; {{ brand.poc_ytd }} YTD</span>{% endif %}</div>{% endif %}</td><td align="right" valign="top" style="border-top:1px solid #e7e5ec;padding:10px 0;{{ cell_label() }}font-size:15px;line-height:21px;font-weight:700;color:#15141f;white-space:nowrap;">{% if brand.margin %}<span style="font-weight:400;font-size:13px;color:#9a99a5;">{{ brand.margin }}</span>&nbsp;&nbsp;{% endif %}{{ brand.value }}</td></tr>
 {%- endmacro -%}
 {%- macro bar_chart(chart) -%}
-<div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;line-height:16px;color:#6b6a75;padding-bottom:10px;text-align:center;">{{ chart.label }}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-<td valign="bottom" style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;line-height:15px;color:#9a99a5;padding-bottom:6px;">{% if chart.start %}{{ chart.start.date }}<br><span style="font-size:15px;line-height:19px;font-weight:700;color:#2b2a35;">{{ chart.start.value }}</span>{% endif %}</td>
-{%- for mark in chart.marks %}
-<td align="right" valign="bottom" width="1" style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;line-height:15px;color:#9a99a5;padding:0 0 6px 18px;text-align:right;white-space:nowrap;">{{ mark.date }}<br><span style="font-size:15px;line-height:19px;font-weight:700;color:{{ mark.colour or '#2b2a35' }};">{{ mark.value }}</span></td>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;table-layout:fixed;"><tr>
+{%- for bar in chart.bars %}
+<td width="{{ chart.width }}%" align="center" valign="bottom" style="padding:0 6px;text-align:center;">
+<div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:15px;line-height:19px;font-weight:700;color:{{ bar.text }};padding-bottom:6px;white-space:nowrap;">{{ bar.value }}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td height="{{ chart.height }}" valign="bottom" style="height:{{ chart.height }}px;font-size:1px;line-height:1px;">{% if bar.height %}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td height="{{ bar.height }}" bgcolor="{{ bar.colour }}" style="height:{{ bar.height }}px;background-color:{{ bar.colour }};border-radius:3px 3px 0 0;font-size:1px;line-height:1px;">&#8203;</td></tr></table>{% else %}&#8203;{% endif %}</td></tr></table>
+</td>
 {%- endfor %}
-</tr></table>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;table-layout:fixed;border-bottom:1px solid #d9d6e3;"><tr>
-{%- for bar in chart.bars %}<td width="{{ chart.width }}%" height="{{ chart.height }}" valign="bottom" style="height:{{ chart.height }}px;padding:0 1px;font-size:1px;line-height:1px;">{% if bar.height %}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td height="{{ bar.height }}" bgcolor="{{ bar.colour }}" style="height:{{ bar.height }}px;background-color:{{ bar.colour }};font-size:1px;line-height:1px;">&#8203;</td></tr></table>{% else %}&#8203;{% endif %}</td>{% endfor %}
+</tr><tr>
+{%- for bar in chart.bars %}
+<td align="center" style="border-top:1px solid #d9d6e3;padding:6px 2px 0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;line-height:16px;color:{{ '#2b2a35' if loop.last else '#9a99a5' }};{{ 'font-weight:700;' if loop.last else '' }}text-align:center;white-space:nowrap;">{{ bar.label }}</td>
+{%- endfor %}
 </tr></table>
 {%- endmacro -%}
 <!doctype html>
@@ -90,43 +92,39 @@ table,td,div,p,span,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;te
 <div style="{{ cell_label() }}font-size:10px;line-height:15px;color:#9a99a5;font-style:italic;padding-top:12px;text-align:center;">Open pipeline only. Excludes won and lost business.</div>
 </td></tr></table></td></tr>
 {%- if progress %}
-{%- set p = progress.pipeline %}
-<tr><td class="pad" style="padding:52px 40px 0;"><div class="sh" style="{{ cell_label() }}font-size:24px;line-height:30px;font-weight:700;color:#15141f;letter-spacing:-0.3px;text-align:center;">{{ p.question }}</div>
+{%- for s in progress.sections %}
+<tr><td class="pad" style="padding:52px 40px 0;"><div class="sh" style="{{ cell_label() }}font-size:24px;line-height:30px;font-weight:700;color:#15141f;letter-spacing:-0.3px;text-align:center;">{{ s.title }}</div>
 {{ rule() }}</td></tr>
-<tr><td class="pad" style="padding:22px 40px 0;">{{ bar_chart(p.chart) }}</td></tr>
-<tr><td class="pad" style="padding:28px 40px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-<tr><td colspan="2" style="padding:0 0 10px;{{ cell_label() }}font-size:15px;line-height:20px;font-weight:700;color:#e91e8c;">{{ p.new_column.heading }}</td></tr>
-{%- if not p.new_column.brands and p.new_column.empty_note %}
-<tr><td colspan="2" style="border-top:1px solid #e7e5ec;padding:14px 0;{{ cell_label() }}font-size:14px;line-height:20px;color:#6b6a75;">{{ p.new_column.empty_note }}</td></tr>
+{%- if s.chart %}
+<tr><td class="pad" style="padding:24px 40px 0;">{{ bar_chart(s.chart) }}</td></tr>
 {%- endif %}
-{%- for brand in p.new_column.brands %}{{ brand_row(brand) }}{% endfor %}
-{%- if p.new_column.extra_brands %}
-<tr><td colspan="2" style="padding:22px 0 10px;{{ cell_label() }}font-size:15px;line-height:20px;font-weight:700;color:#e91e8c;">{{ p.new_column.extra_heading }}</td></tr>
-{%- for brand in p.new_column.extra_brands %}{{ brand_row(brand) }}{% endfor %}
-{%- endif %}
-</table></td></tr>
-{%- set w = progress.win_rate %}
-<tr><td class="pad" style="padding:52px 40px 0;"><div class="sh" style="{{ cell_label() }}font-size:24px;line-height:30px;font-weight:700;color:#15141f;letter-spacing:-0.3px;text-align:center;">{{ w.question }}</div>
-{{ rule() }}</td></tr>
-<tr><td class="pad" style="padding:22px 40px 0;">{{ bar_chart(w.chart) }}</td></tr>
-{%- set b = progress.big %}
-<tr><td class="pad" style="padding:52px 40px 0;"><div class="sh" style="{{ cell_label() }}font-size:24px;line-height:30px;font-weight:700;color:#15141f;letter-spacing:-0.3px;text-align:center;">{{ b.question }}</div>
-{{ rule() }}<div style="{{ cell_label() }}font-size:14px;line-height:20px;color:#6b6a75;padding-top:12px;text-align:center;">{{ b.headline }}</div></td></tr>
-{%- if b.clients %}
+{%- if s.clients %}
 <tr><td class="pad" style="padding:20px 40px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-<tr><td width="52" style="padding:0 0 8px;{{ cell_label() }}font-size:11px;line-height:15px;color:#9a99a5;">Margin</td><td style="padding:0 0 8px;{{ cell_label() }}font-size:11px;line-height:15px;color:#9a99a5;">Client</td><td align="right" style="padding:0 0 8px;{{ cell_label() }}font-size:11px;line-height:15px;color:#9a99a5;text-align:right;">Won, last 12 months</td></tr>
-{%- for client in b.clients %}
-<tr><td width="52" valign="top" style="border-top:1px solid #e7e5ec;padding:10px 8px 10px 0;{{ cell_label() }}font-size:13px;line-height:21px;color:#9a99a5;">{% if client.margin %}{{ client.margin }}{% else %}&ndash;{% endif %}</td>
-<td valign="top" style="border-top:1px solid #e7e5ec;padding:10px 10px 10px 0;{{ cell_label() }}font-size:15px;line-height:21px;color:#15141f;">{{ client.name }}
+<tr><td style="padding:0 0 8px;{{ cell_label() }}font-size:11px;line-height:15px;color:#9a99a5;">Client</td><td width="58" align="right" style="padding:0 12px 8px 0;{{ cell_label() }}font-size:11px;line-height:15px;color:#9a99a5;text-align:right;">Margin</td><td width="96" align="right" style="padding:0 0 8px;{{ cell_label() }}font-size:11px;line-height:15px;color:#9a99a5;text-align:right;">Won, last 12 months</td></tr>
+{%- for client in s.clients %}
+<tr><td valign="top" style="border-top:1px solid #e7e5ec;padding:10px 10px 10px 0;{{ cell_label() }}font-size:15px;line-height:21px;color:#15141f;">{{ client.name }}
 <div style="{{ cell_label() }}font-size:13px;line-height:18px;color:#6b6a75;padding-top:1px;">{{ client.programmes }}</div>
 <div style="{{ cell_label() }}font-size:13px;line-height:18px;padding-top:1px;color:{{ '#b91c1c' if client.at_risk else '#6b6a75' }};{{ 'font-weight:700;' if client.at_risk else '' }}">{{ client.open }}</div></td>
-<td align="right" valign="top" style="border-top:1px solid #e7e5ec;padding:10px 0;{{ cell_label() }}font-size:15px;line-height:21px;font-weight:700;color:#15141f;white-space:nowrap;">{{ client.won }}</td></tr>
+<td width="58" align="right" valign="top" style="border-top:1px solid #e7e5ec;padding:10px 12px 10px 0;{{ cell_label() }}font-size:14px;line-height:21px;color:#6b6a75;text-align:right;white-space:nowrap;">{% if client.margin %}{{ client.margin }}{% else %}&ndash;{% endif %}</td>
+<td width="96" align="right" valign="top" style="border-top:1px solid #e7e5ec;padding:10px 0;{{ cell_label() }}font-size:15px;line-height:21px;font-weight:700;color:#15141f;text-align:right;white-space:nowrap;">{{ client.won }}</td></tr>
 {%- endfor %}
 </table></td></tr>
-{%- if b.margin_note %}
-<tr><td class="pad" style="padding:14px 40px 0;{{ cell_label() }}font-size:10px;line-height:15px;font-style:italic;color:#9a99a5;text-align:center;">{{ b.margin_note }}</td></tr>
 {%- endif %}
+<tr><td class="pad" style="padding:18px 40px 0;"><div style="{{ cell_label() }}font-size:14px;line-height:21px;color:#2b2a35;text-align:center;">{{ s.summary }}</div></td></tr>
+{%- if s.new_column %}
+<tr><td class="pad" style="padding:28px 40px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+<tr><td colspan="2" style="padding:0 0 10px;{{ cell_label() }}font-size:15px;line-height:20px;font-weight:700;color:#e91e8c;">{{ s.new_column.heading }}</td></tr>
+{%- if not s.new_column.brands and s.new_column.empty_note %}
+<tr><td colspan="2" style="border-top:1px solid #e7e5ec;padding:14px 0;{{ cell_label() }}font-size:14px;line-height:20px;color:#6b6a75;">{{ s.new_column.empty_note }}</td></tr>
 {%- endif %}
+{%- for brand in s.new_column.brands %}{{ brand_row(brand) }}{% endfor %}
+{%- if s.new_column.extra_brands %}
+<tr><td colspan="2" style="padding:22px 0 10px;{{ cell_label() }}font-size:15px;line-height:20px;font-weight:700;color:#e91e8c;">{{ s.new_column.extra_heading }}</td></tr>
+{%- for brand in s.new_column.extra_brands %}{{ brand_row(brand) }}{% endfor %}
+{%- endif %}
+</table></td></tr>
+{%- endif %}
+{%- endfor %}
 {%- else %}
 <tr><td class="pad" style="padding:52px 40px 0;"><div class="sh" style="{{ cell_label() }}font-size:24px;line-height:30px;font-weight:700;color:#15141f;letter-spacing:-0.3px;text-align:center;">Top brands by weighted value</div>
 {{ rule() }}</td></tr>

@@ -17,7 +17,7 @@ A week ends on Sunday. "Now" is the live position on the report date.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Callable
 
@@ -245,16 +245,9 @@ def big_clients(won: list[Closed], report_date: date, open_by_brand: dict[str, t
 
 
 # -- the whole picture -----------------------------------------------------
-@dataclass
-class Flow:
-    """New-brand deals that came in and went out since the comparison week."""
-    since: date
-    added: int = 0
-    added_gbp: float = 0.0
-    won: int = 0
-    won_gbp: float = 0.0
-    lost: int = 0
-    lost_gbp: float = 0.0
+def checkpoints(report_date: date, months: int = 12, step: int = 3) -> list[date]:
+    """A year back in three-month steps, oldest first; today is added by the caller."""
+    return [months_before(report_date, back) for back in range(months, 0, -step)]
 
 
 @dataclass
@@ -262,43 +255,19 @@ class Progress:
     rates: dict[str, float]
     weeks: list[WeekPoint]  # finished weeks, oldest first
     now: WeekPoint
-    win_rates: list[WinRate]  # one per shown week, then now
+    checkpoints: list[date]  # a year back in three-month steps, oldest first
+    win_rates: list[WinRate]  # one per checkpoint, then today
+    last_week_win_rate: WinRate | None
     win_rate_weeks: int
     clients: list[BigClient]
-    flow: Flow | None = None
-    weeks_shown: int = 26
     fresh_weeks: int = 0  # worked out this run rather than read from the cache
-    notes: list[str] = field(default_factory=list)
-
-    @property
-    def shown(self) -> list[WeekPoint]:
-        return self.weeks[-self.weeks_shown:]
 
     @property
     def last_week(self) -> WeekPoint | None:
         """The latest finished week: last Sunday, whatever day the report runs."""
         return self.weeks[-1] if self.weeks else None
 
-
-def build_flow(*, since: date, report_date: date, deals: list[dict], won: list[Closed],
-               lost: list[Closed], clock: BrandClock, rates: dict[str, float]) -> Flow:
-    flow = Flow(since=since)
-    start, end = end_of(since), end_of(report_date)
-    for deal in deals:
-        if is_test_deal(deal.get("title")):
-            continue
-        added = _as_datetime(deal.get("add_time"))
-        if added is None or not (start < added <= end) or not clock.is_new(deal, added):
-            continue
-        currency = str(deal.get("currency") or "GBP").upper()
-        flow.added += 1
-        flow.added_gbp += _as_float(deal.get("value")) * rates.get(currency, 1.0)
-    for c in won:
-        if start < c.on <= end and clock.is_new(c.deal, c.on):
-            flow.won += 1
-            flow.won_gbp += c.value_gbp
-    for c in lost:
-        if start < c.on <= end and clock.is_new(c.deal, c.on):
-            flow.lost += 1
-            flow.lost_gbp += c.value_gbp
-    return flow
+    def at(self, on: date) -> WeekPoint | None:
+        """The pipeline as it stood on ``on``: the last finished week by then."""
+        before = [w for w in self.weeks if w.week_ending <= on]
+        return before[-1] if before else None
