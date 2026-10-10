@@ -3,10 +3,14 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from . import brand_history, campaign_finance, email_html, excel, fx, mailer, pipeline_trend, team_directory
+from . import (
+    brand_history, campaign_finance, email_html, excel, fx, mailer, pipeline_trend, progress,
+    team_directory, weekly_cache,
+)
+from .brands import resolve_brands
 from .client_aliases import alias_map
 from .config import Settings
 from .model import ReportData, build_report
@@ -37,29 +41,71 @@ def today_in(timezone: str) -> date:
 
 
 
-def _collect_trend(settings: Settings, client: PipedriveClient, report_date: date,
-                   rates: dict[str, float], stages_payload: list[dict]):
-    """Snapshots of the pipeline a year, six and three months ago.
+def _collect_progress(settings: Settings, client: PipedriveClient, data: ReportData, *,
+                      orgs: dict[int, dict], brands_by_org: dict, won_payload: list[dict],
+                      stages_payload: list[dict]) -> progress.Progress | None:
+    """The weekly picture: new-brand pipeline, win rate and big clients.
 
-    One request per deal for its change history, so this is the slowest part of
-    a run. It is also the most expendable: a failure costs the trend block, not
-    the report, so nothing here is allowed to raise.
+    Finished weeks come from the Supabase cache where saved; anything missing
+    is rebuilt from Pipedrive's change logs and saved for next time. This is
+    the most expendable part of a run, so nothing here is allowed to raise:
+    a failure costs the section, not the report.
     """
-    if not settings.show_trend:
-        return []
+    if not (settings.show_progress or settings.show_trend):
+        return None
     try:
+        report_date = data.report_date
+        weeks_shown = max(1, settings.progress_weeks)
+        history_weeks = max(progress.HISTORY_WEEKS, weeks_shown)
+        probabilities = pipeline_trend.stage_probabilities(stages_payload)
+        clock = progress.BrandClock(brands_by_org, orgs, won_payload)
         deals = client.deals_for_history(settings.pipedrive_pipeline_id)
-        changelogs = client.changelogs(
-            [deal["id"] for deal in deals if deal.get("id") is not None],
-            workers=settings.trend_workers,
+
+        first_week = progress.week_endings(report_date, history_weeks)[0]
+        cached = weekly_cache.load_weeks(settings.supabase_url, settings.supabase_key, first_week)
+        weeks, fresh = progress.build_weeks(
+            report_date=report_date, cached=cached, deals=deals,
+            fetch_changelogs=lambda ids: client.changelogs(ids, workers=settings.trend_workers),
+            probability_by_stage=probabilities, clock=clock, count=history_weeks,
         )
-        return pipeline_trend.build_trend(
-            report_date=report_date, deals=deals, changelogs=changelogs,
-            rates=rates, stages_payload=stages_payload,
+        weekly_cache.save_weeks(settings.supabase_url, settings.supabase_key, fresh)
+
+        rates = data.rates
+        window = settings.win_rate_weeks
+        lost_since = progress.week_endings(report_date, weeks_shown)[0] - timedelta(weeks=window + 1)
+        won = progress.closed_deals(won_payload, "won_time", rates, brands_by_org)
+        lost = progress.closed_deals(
+            client.lost_deals(lost_since, settings.pipedrive_pipeline_id),
+            "lost_time", rates, brands_by_org,
         )
-    except Exception as exc:  # noqa: BLE001 - the trend is never worth a failed send
-        log.warning("Pipeline trend could not be built: %s", exc)
-        return []
+        result = progress.Progress(
+            rates=rates,
+            weeks=weeks,
+            now=progress.now_point(report_date=report_date, deals=deals,
+                                   probability_by_stage=probabilities, clock=clock),
+            win_rates=[
+                progress.win_rate(won, lost, week.week_ending, window)
+                for week in weeks[-weeks_shown:]
+            ] + [progress.win_rate(won, lost, report_date, window)],
+            win_rate_weeks=window,
+            clients=progress.big_clients(
+                won, report_date,
+                {b.name: (b.open_deals, b.weighted_gbp) for b in data.brands},
+                settings.big_client_count,
+            ),
+            weeks_shown=weeks_shown,
+            fresh_weeks=len(fresh),
+        )
+        if result.last_week is not None:
+            result.flow = progress.build_flow(
+                since=result.last_week.week_ending, report_date=report_date, deals=deals,
+                won=won, lost=lost, clock=clock, rates=rates,
+            )
+        return result
+    except Exception as exc:  # noqa: BLE001 - never worth a failed send
+        log.warning("Weekly progress could not be built: %s", exc)
+        return None
+
 
 def collect(settings: Settings, report_date: date | None = None) -> ReportData:
     """Fetch everything the report needs from Pipedrive."""
@@ -99,11 +145,24 @@ def collect(settings: Settings, report_date: date | None = None) -> ReportData:
             client.deal_orgs(set(finance.by_deal)) if finance.loaded else {}
         )
         stages_payload = client.stages(pipeline_id)
-        trend = _collect_trend(settings, client, report_date, rates, stages_payload)
+        field_keys = client.field_keys(settings.field_overrides())
+        # Resolved once here so the weekly history sorts deals into brands
+        # exactly as the report does.
+        brands_by_org = resolve_brands(
+            all_orgs,
+            {org_id: 1 for org_id in won_org_ids},
+            website_key=field_keys.get("org_website"),
+        )
         fy_start = settings.financial_year_start(report_date)
-        won_payload = client.won_deals(fy_start, pipeline_id) if settings.show_ytd else []
+        # The big-client table compares this year with last, so with the
+        # weekly section on, wins are read two years back.
+        won_since = fy_start
+        if settings.show_progress:
+            won_since = min(fy_start, pipeline_trend.months_before(report_date, 24))
+        want_won = settings.show_ytd or settings.show_progress
+        won_payload = client.won_deals(won_since, pipeline_id) if want_won else []
 
-        return build_report(
+        data = build_report(
             report_date=report_date,
             rates=rates,
             rates_are_live=live,
@@ -114,16 +173,25 @@ def collect(settings: Settings, report_date: date | None = None) -> ReportData:
             org_contacts=client.persons_by_org(org_ids),
             users=client.users(),
             won_org_ids=won_org_ids,
-            field_keys=client.field_keys(settings.field_overrides()),
+            field_keys=field_keys,
             directory=directory,
+            brands_by_org=brands_by_org,
             history=history,
-            won_deals_payload=won_payload,
+            won_deals_payload=won_payload if settings.show_ytd else [],
             financial_year_start=fy_start,
             finance=finance,
             campaign_deal_orgs=campaign_deal_orgs,
             client_aliases=alias_map(settings.client_aliases),
-            trend=trend,
         )
+        data.progress = _collect_progress(
+            settings, client, data, orgs=all_orgs, brands_by_org=brands_by_org,
+            won_payload=won_payload, stages_payload=stages_payload,
+        )
+        if data.progress is not None and settings.show_trend:
+            data.trend = progress.trend_from_weeks(report_date, data.progress.weeks, rates)
+        if not settings.show_progress:
+            data.progress = None
+        return data
 
 
 def build(settings: Settings, data: ReportData) -> Artefacts:

@@ -131,6 +131,13 @@ class Settings(BaseSettings):
     # request per deal - so it can be switched off if it ever costs too much.
     show_trend: bool = True
     trend_workers: int = 4
+    # "How we're tracking" in the email: new-brand pipeline, win rate and big
+    # clients, week by week. Finished weeks are cached in Supabase
+    # (report_weekly_pipeline) so history is only rebuilt once.
+    show_progress: bool = True
+    progress_weeks: int = 26
+    win_rate_weeks: int = 13
+    big_client_count: int = 5
 
     # --- Web ---------------------------------------------------------------
     port: int = 8000

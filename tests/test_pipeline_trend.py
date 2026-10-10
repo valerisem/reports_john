@@ -6,7 +6,7 @@ import datetime as dt
 import pytest
 
 from app.pipeline_trend import (
-    build_trend, is_test_deal, months_before, snapshot_at, snapshot_dates, value_at,
+    is_test_deal, months_before, snapshot_at, snapshot_dates, stage_probabilities, value_at,
 )
 
 MOMENT = dt.datetime(2026, 7, 5, 23, 59, 59, tzinfo=dt.timezone.utc)
@@ -107,7 +107,7 @@ def test_an_unknown_stage_weights_at_nothing_rather_than_guessing():
 def test_snapshot_dates_are_one_year_six_and_three_months_back():
     labels = snapshot_dates(dt.date(2026, 10, 5))
     assert [str(on) for _, on in labels] == ["2025-10-05", "2026-04-05", "2026-07-05"]
-    assert labels[0][0] == "1 year ago  (5 Oct 2025)"
+    assert labels[0][0] == "1 year ago"
 
 
 def test_month_arithmetic_clamps_to_a_real_date():
@@ -115,10 +115,5 @@ def test_month_arithmetic_clamps_to_a_real_date():
     assert months_before(dt.date(2026, 1, 15), 12) == dt.date(2025, 1, 15)
 
 
-def test_build_trend_returns_the_three_snapshots_oldest_first():
-    stages = [{"id": 7, "deal_probability": 85}, {"id": 2, "deal_probability": 45}]
-    out = build_trend(report_date=dt.date(2026, 10, 5), deals=[deal(status="open")],
-                      changelogs={}, rates=RATES, stages_payload=stages)
-    assert [s.on for s in out] == [dt.date(2025, 10, 5), dt.date(2026, 4, 5), dt.date(2026, 7, 5)]
-    # Created in January, so it is absent from the 2025 snapshot and present after.
-    assert [s.open_deals for s in out] == [0, 1, 1]
+def test_stage_probabilities_are_shares_not_percentages():
+    assert stage_probabilities([{"id": 7, "deal_probability": 85}, {"id": None}]) == {7: 0.85}

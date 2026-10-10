@@ -129,6 +129,9 @@ class ReportData:
     campaigns_unmatched: list[str] = field(default_factory=list)
     # What the pipeline looked like a year, six and three months ago.
     trend: list[Snapshot] = field(default_factory=list)
+    # Week-by-week progress for the email (app.progress.Progress), or None
+    # when it is switched off or could not be built.
+    progress: Any = None
 
     # -- headline numbers --------------------------------------------------
     @property

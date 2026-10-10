@@ -10,14 +10,17 @@ values, reopened deals, edited amounts and deletions alike.
 Deleted deals are included deliberately. A deal deleted in September was still
 open in July, and dropping it would understate every earlier snapshot.
 
-The same FX rates and stage probabilities are used for every snapshot, so the
-trend shows the pipeline moving rather than the exchange rate moving.
+Amounts are kept per currency and converted at the run's own rates, so the
+trend shows the pipeline moving rather than the exchange rate moving. Stage
+probabilities are applied when a week is first worked out; a saved week keeps
+the probabilities of that day.
 """
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from dataclasses import dataclass, field
+from datetime import date, datetime, timezone
+from typing import Callable
 
 log = logging.getLogger(__name__)
 
@@ -84,6 +87,69 @@ def value_at(deal: dict, changes: list[dict], field: str, moment: datetime):
     return earliest.get("old_value")
 
 
+@dataclass
+class Tally:
+    """Open pipeline at one moment, kept per currency.
+
+    Amounts stay in their own currency so a figure saved months ago can be
+    valued at today's rates, and an old week never moves because sterling did.
+    """
+    deals: int = 0
+    value: dict[str, float] = field(default_factory=dict)
+    weighted: dict[str, float] = field(default_factory=dict)
+
+    def add(self, currency: str, amount: float, probability: float) -> None:
+        self.deals += 1
+        self.value[currency] = self.value.get(currency, 0.0) + amount
+        self.weighted[currency] = self.weighted.get(currency, 0.0) + amount * probability
+
+    def value_gbp(self, rates: dict[str, float]) -> float:
+        return in_sterling(self.value, rates)
+
+    def weighted_gbp(self, rates: dict[str, float]) -> float:
+        return in_sterling(self.weighted, rates)
+
+
+def in_sterling(amounts: dict[str, float], rates: dict[str, float]) -> float:
+    return sum(amount * rates.get(currency, 1.0) for currency, amount in amounts.items())
+
+
+def end_of(on: date) -> datetime:
+    return datetime.combine(on, datetime.max.time()).replace(tzinfo=timezone.utc)
+
+
+def tally_at(
+    *,
+    moment: datetime,
+    deals: list[dict],
+    changelogs: dict[int, list[dict]],
+    probability_by_stage: dict[int, float],
+    include: Callable[[dict, datetime], bool] | None = None,
+) -> Tally:
+    """Every deal that was open at ``moment``, optionally narrowed by ``include``."""
+    tally = Tally()
+    for deal in deals:
+        if is_test_deal(deal.get("title")):
+            continue
+        added = _as_datetime(deal.get("add_time"))
+        if added is None or added > moment:
+            continue  # the deal did not exist yet
+        changes = changelogs.get(deal.get("id"), [])
+        if str(value_at(deal, changes, "status", moment) or "").lower() != OPEN:
+            continue
+        if include is not None and not include(deal, moment):
+            continue
+
+        currency = str(value_at(deal, changes, "currency", moment) or "GBP").upper()
+        amount = _as_float(value_at(deal, changes, "value", moment))
+        try:
+            stage_id = int(value_at(deal, changes, "stage_id", moment))
+        except (TypeError, ValueError):
+            stage_id = None
+        tally.add(currency, amount, probability_by_stage.get(stage_id, 0.0))
+    return tally
+
+
 def snapshot_at(
     *,
     label: str,
@@ -94,35 +160,10 @@ def snapshot_at(
     probability_by_stage: dict[int, float],
 ) -> Snapshot:
     """Totals for every deal that was open at the end of ``on``."""
-    moment = datetime.combine(on, datetime.max.time()).replace(tzinfo=timezone.utc)
-    count = 0
-    value_gbp = 0.0
-    weighted_gbp = 0.0
-
-    for deal in deals:
-        if is_test_deal(deal.get("title")):
-            continue
-        added = _as_datetime(deal.get("add_time"))
-        if added is None or added > moment:
-            continue  # the deal did not exist yet
-        changes = changelogs.get(deal.get("id"), [])
-        if str(value_at(deal, changes, "status", moment) or "").lower() != OPEN:
-            continue
-
-        currency = str(value_at(deal, changes, "currency", moment) or "GBP").upper()
-        amount = _as_float(value_at(deal, changes, "value", moment))
-        try:
-            stage_id = int(value_at(deal, changes, "stage_id", moment))
-        except (TypeError, ValueError):
-            stage_id = None
-
-        in_sterling = amount * rates.get(currency, 1.0)
-        count += 1
-        value_gbp += in_sterling
-        weighted_gbp += in_sterling * probability_by_stage.get(stage_id, 0.0)
-
-    return Snapshot(label=label, on=on, open_deals=count,
-                    value_gbp=value_gbp, weighted_gbp=weighted_gbp)
+    tally = tally_at(moment=end_of(on), deals=deals, changelogs=changelogs,
+                     probability_by_stage=probability_by_stage)
+    return Snapshot(label=label, on=on, open_deals=tally.deals,
+                    value_gbp=tally.value_gbp(rates), weighted_gbp=tally.weighted_gbp(rates))
 
 
 def months_before(on: date, months: int) -> date:
@@ -143,30 +184,15 @@ def months_before(on: date, months: int) -> date:
 def snapshot_dates(report_date: date) -> list[tuple[str, date]]:
     """One year, six months and three months before the report."""
     return [
-        (f"1 year ago  ({months_before(report_date, 12).strftime('%-d %b %Y')})",
-         months_before(report_date, 12)),
-        (f"6 months ago  ({months_before(report_date, 6).strftime('%-d %b %Y')})",
-         months_before(report_date, 6)),
-        (f"3 months ago  ({months_before(report_date, 3).strftime('%-d %b %Y')})",
-         months_before(report_date, 3)),
+        ("1 year ago", months_before(report_date, 12)),
+        ("6 months ago", months_before(report_date, 6)),
+        ("3 months ago", months_before(report_date, 3)),
     ]
 
 
-def build_trend(
-    *,
-    report_date: date,
-    deals: list[dict],
-    changelogs: dict[int, list[dict]],
-    rates: dict[str, float],
-    stages_payload: list[dict],
-) -> list[Snapshot]:
-    probability_by_stage = {
+def stage_probabilities(stages_payload: list[dict]) -> dict[int, float]:
+    return {
         stage["id"]: float(stage.get("deal_probability") or 0) / 100.0
         for stage in stages_payload
         if stage.get("id") is not None
     }
-    return [
-        snapshot_at(label=label, on=on, deals=deals, changelogs=changelogs,
-                    rates=rates, probability_by_stage=probability_by_stage)
-        for label, on in snapshot_dates(report_date)
-    ]

@@ -197,7 +197,7 @@ def test_email_shows_the_headline_stats(html, data):
 
 
 def test_email_lists_ten_brands_per_column(html, data):
-    assert "Top 10 retained clients" in html
+    assert "Top 5 retained clients" in html
     assert "New this week" in html  # wording follows the cadence
     # Without history nothing counts as new, so that column is empty.
     assert data.brands_new_this_report == []
@@ -208,7 +208,7 @@ def test_email_lists_ten_brands_per_column(html, data):
 
 
 def test_email_counts_the_brands_not_shown(html, data):
-    shown = min(10, sum(1 for b in data.brands if b.client_status == EXISTING))
+    shown = min(5, sum(1 for b in data.brands if b.client_status == EXISTING))
     shown += len(data.brands_new_this_report[:10])
     if len(data.brands_new_this_report) < 3:
         shown += 5      # the fallback list

@@ -116,16 +116,24 @@ class PipedriveClient:
         return list(self._paginate_v2("/api/v2/deals", params))
 
     def won_deals(self, since: date, pipeline_id: int | None = None) -> list[dict]:
-        """Deals won on or after ``since``.
+        """Deals won on or after ``since``."""
+        return self.closed_deals("won", since, pipeline_id)
 
-        /api/v2/deals hides archived deals and Pipedrive archives old won ones,
-        so the archived set is fetched separately and merged; a year-to-date
-        total built from the default view alone reads low. Pipedrive has no
-        won_time filter, so the cut-off is applied here.
+    def lost_deals(self, since: date, pipeline_id: int | None = None) -> list[dict]:
+        """Deals lost on or after ``since``."""
+        return self.closed_deals("lost", since, pipeline_id)
+
+    def closed_deals(self, status: str, since: date, pipeline_id: int | None = None) -> list[dict]:
+        """Deals won or lost on or after ``since``.
+
+        /api/v2/deals hides archived deals and Pipedrive archives old closed
+        ones, so the archived set is fetched separately and merged; a total
+        built from the default view alone reads low. Pipedrive has no won_time
+        or lost_time filter, so the cut-off is applied here.
         """
         seen: dict[int, dict] = {}
         for archived in (False, True):
-            params: dict[str, Any] = {"status": "won"}
+            params: dict[str, Any] = {"status": status}
             if pipeline_id:
                 params["pipeline_id"] = pipeline_id
             if archived:
@@ -135,11 +143,11 @@ class PipedriveClient:
             except PipedriveError:
                 if not archived:
                     raise
-                log.warning("Archived won deals could not be fetched; totals may read low.")
+                log.warning("Archived %s deals could not be fetched; totals may read low.", status)
                 continue
             for deal in page:
-                won_on = _as_date(deal.get("won_time") or deal.get("local_won_date"))
-                if won_on and won_on >= since:
+                closed_on = _as_date(deal.get(f"{status}_time") or deal.get(f"local_{status}_date"))
+                if closed_on and closed_on >= since:
                     seen[deal["id"]] = deal
         return list(seen.values())
 

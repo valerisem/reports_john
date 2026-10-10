@@ -24,9 +24,36 @@ palette, number formats, conditional formatting and charts as the template:
 Values stay as **live formulas**, not hard-coded numbers, so the recipient can
 re-sort, filter and audit the figures in Excel.
 
-**The email** — the newsletter design: headline stats, top 10 clients and top 10
-new business by weighted value, pipeline by stage, and weighted value by account
-owner.
+**The email** — the newsletter design: headline stats, **How we're tracking**
+(below), top 5 retained clients and the new business by weighted value, the pod
+leaderboard, and pipeline by stage.
+
+### How we're tracking
+
+Three questions, each answered with a verdict (▲ / ● / ▼), a one-line headline
+and a bar per week for the last 26 weeks plus today:
+
+| Question | Measure |
+|---|---|
+| Is the new-brand pipeline growing? | Open deals and weighted value for brands we have never won a deal with, at the end of each week (Sunday). Compared with the finished week at least seven days back, plus what came in and went out since |
+| Is the win rate holding? | Won value ÷ (won + lost value) over a rolling 13 weeks |
+| Are our biggest clients committing to more? | Top 5 clients by value won in the last 12 months: programmes (won deals) this year vs the year before, and whether anything is open now |
+
+Past weeks are rebuilt from Pipedrive's deal change logs, which costs one
+request per deal. Each finished week is therefore saved in Supabase
+(`report_weekly_pipeline`, created by `sql/report_weekly_pipeline.sql`) and
+never worked out again; a run only reads change logs for deals edited since the
+last saved week. Amounts are saved per currency and converted at the run's FX
+rates. If the table is missing or Supabase is down, the run rebuilds every week
+instead and the email still goes out. If the section cannot be built at all, it
+is left out rather than failing the send.
+
+Saved weeks keep the stage probabilities of the day they were worked out. After
+changing probabilities in Pipedrive, `delete from report_weekly_pipeline;` to
+rebuild them.
+
+`SHOW_PROGRESS=false` removes the section; `PROGRESS_WEEKS`, `WIN_RATE_WEEKS`
+and `BIG_CLIENT_COUNT` tune it.
 
 ---
 
