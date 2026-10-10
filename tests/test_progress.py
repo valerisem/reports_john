@@ -185,7 +185,7 @@ def test_checkpoints_run_a_year_back_in_three_month_steps():
 
 def test_sections_are_headed_plainly_in_order(html_and_text):
     html, _ = html_and_text
-    titles = ["Win Rate", "New Brand Pipeline", "Biggest Clients"]
+    titles = ["Win Rate", "New Business Pipeline", "Biggest Clients"]
     positions = [html.index(f">{t}</div>") for t in titles]
     assert positions == sorted(positions)
     assert "?" not in "".join(html[p - 300:p] for p in positions)
@@ -203,7 +203,7 @@ def test_each_section_says_what_it_means_in_one_short_line(html_and_text):
     html, _ = html_and_text
     assert ("In the last 3 months we won £36k and lost £64k: a 36% win rate "
             "(37% last week, 56% a year ago).") in html
-    assert "Open deals with new brands are worth £80k, up" in html
+    assert "Open new business deals are worth £80k, up" in html
     assert "on last week and up" in html and "on a year ago." in html
     assert "1 of our 2 biggest clients has more in the pipeline; OldCo has nothing open." in html
 
@@ -231,7 +231,7 @@ def test_client_name_comes_before_margin_then_won(html_and_text):
 
 def test_new_this_week_sits_under_the_pipeline(html_and_text):
     html, _ = html_and_text
-    assert html.index(">New Brand Pipeline<") < html.index("New this week") < html.index(">Biggest Clients<")
+    assert html.index(">New Business Pipeline<") < html.index("New this week") < html.index(">Biggest Clients<")
 
 
 def test_without_progress_the_old_brand_lists_stay():

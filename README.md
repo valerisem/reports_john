@@ -24,10 +24,10 @@ palette, number formats, conditional formatting and charts as the template:
 Values stay as **live formulas**, not hard-coded numbers, so the recipient can
 re-sort, filter and audit the figures in Excel.
 
-**The email** — the newsletter design: headline stats, Win Rate, New Brand
+**The email** — the newsletter design: headline stats, Win Rate, New Business
 Pipeline and Biggest Clients (below), the pod leaderboard, and pipeline by stage.
 
-### Win Rate, New Brand Pipeline, Biggest Clients
+### Win Rate, New Business Pipeline, Biggest Clients
 
 Three sections under the headline numbers, each ending in a plain line on what
 it means. The two charts show a year in three-month steps, ending today; the
@@ -36,7 +36,7 @@ summary line also says how the figure moved since last week.
 | Section | Measure |
 |---|---|
 | Win Rate | Won value ÷ (won + lost value) over a rolling 13 weeks |
-| New Brand Pipeline | Weighted value of open deals with brands we have never won a deal with. "New this week" sits underneath |
+| New Business Pipeline | Weighted value of open deals with brands we have never won a deal with. "New this week" sits underneath |
 | Biggest Clients | Top 5 clients by value won in the last 12 months: margin, programmes (won deals) against the year before, and what is open now |
 
 Past weeks are rebuilt from Pipedrive's deal change logs, which costs one

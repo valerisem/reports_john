@@ -319,7 +319,7 @@ def _progress_section(data: ReportData, new_column: dict) -> dict | None:
         if point is not None:
             values.append((label, point.new.weighted_gbp(rates)))
     weighted = progress.now.new.weighted_gbp(rates)
-    summary = f"Open deals with new brands are worth {compact_gbp(weighted)}"
+    summary = f"Open new business deals are worth {compact_gbp(weighted)}"
     changes = []
     if progress.last_week is not None:
         changes.append(_versus(weighted, progress.last_week.new.weighted_gbp(rates),
@@ -333,7 +333,7 @@ def _progress_section(data: ReportData, new_column: dict) -> dict | None:
         summary += ", " + " and ".join(changes)
     summary += "."
     pipeline = {
-        "title": "New Brand Pipeline",
+        "title": "New Business Pipeline",
         "chart": _chart(values, series="pink", fmt=compact_gbp),
         "summary": summary,
         "new_column": new_column,
