@@ -298,9 +298,8 @@ def _progress_section(data: ReportData, new_column: dict) -> dict | None:
     if now_rate is None:
         summary = f"No deals were won or lost in the last {window}."
     else:
-        decided = current.won_gbp + current.lost_gbp
-        summary = (f"Of {compact_gbp(decided)} in deals won or lost in the last {window}, "
-                   f"we won {compact_gbp(current.won_gbp)}: {percent(now_rate)}")
+        summary = (f"In the last {window} we won {compact_gbp(current.won_gbp)} and lost "
+                   f"{compact_gbp(current.lost_gbp)}: a {percent(now_rate)} win rate")
         before = [f"{percent(r)} {when}" for r, when in
                   ((week_rate, "last week"), (year_rate, "a year ago")) if r is not None]
         if before:
