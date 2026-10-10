@@ -292,16 +292,16 @@ def _progress_section(data: ReportData, new_column: dict) -> dict | None:
     now_rate = win_rates[-1].rate
     year_rate = win_rates[0].rate
     week_rate = progress.last_week_win_rate.rate if progress.last_week_win_rate else None
-    pts = lambda x: _plural(round(x * 100), "point")
+    weeks = progress.win_rate_weeks
+    window = f"{weeks // 13 * 3} months" if weeks % 13 == 0 else f"{weeks} weeks"
     if now_rate is None:
-        summary = f"No deals were closed in the last {progress.win_rate_weeks} weeks."
+        summary = f"Nothing closed in the last {window}."
     else:
-        summary = (f"Of the value of all deals closed in the last {progress.win_rate_weeks} weeks, "
-                   f"we won {percent(now_rate)}")
-        if year_rate is not None:
-            summary += f", against {percent(year_rate)} a year ago"
-        if week_rate is not None:
-            summary += f" ({_versus(now_rate, week_rate, pts, flat=0.005)} on last week)"
+        summary = f"We won {percent(now_rate)} of the value we closed in the last {window}"
+        before = [f"{percent(r)} {when}" for r, when in
+                  ((week_rate, "last week"), (year_rate, "a year ago")) if r is not None]
+        if before:
+            summary += " (" + ", ".join(before) + ")"
         summary += "."
     win_rate = {
         "title": "Win Rate",
@@ -317,15 +317,18 @@ def _progress_section(data: ReportData, new_column: dict) -> dict | None:
         if point is not None:
             values.append((label, point.new.weighted_gbp(rates)))
     weighted = progress.now.new.weighted_gbp(rates)
-    summary = (f"Open deals with brands we have never won a deal with are worth "
-               f"{compact_gbp(weighted)}, weighted by each deal\u2019s chance of closing")
+    summary = f"Open deals with new brands are worth {compact_gbp(weighted)}"
+    changes = []
+    if progress.last_week is not None:
+        changes.append(_versus(weighted, progress.last_week.new.weighted_gbp(rates),
+                               compact_gbp, flat=500) + " on last week")
     year = progress.at(progress.checkpoints[0]) if progress.checkpoints else None
     if year is not None and year.new.weighted_gbp(rates):
         before = year.new.weighted_gbp(rates)
-        summary += f": {_versus(weighted, before, lambda x: percent(x / before), flat=before * 0.01)} on a year ago"
-        if progress.last_week is not None:
-            summary += (f" and {_versus(weighted, progress.last_week.new.weighted_gbp(rates), compact_gbp, flat=500)}"
-                        " on last week")
+        changes.append(_versus(weighted, before, lambda x: percent(x / before),
+                               flat=before * 0.01) + " on a year ago")
+    if changes:
+        summary += ", " + " and ".join(changes)
     summary += "."
     pipeline = {
         "title": "New Brand Pipeline",
@@ -340,22 +343,22 @@ def _progress_section(data: ReportData, new_column: dict) -> dict | None:
     idle = [c.name for c in clients if not c.open_deals]
     if clients:
         busy = len(clients) - len(idle)
-        summary = (f"Our {len(clients)} biggest clients by value won in the last 12 months. "
-                   f"{busy} of them {'has' if busy == 1 else 'have'} another programme "
-                   "in the pipeline")
+        summary = (f"{busy} of our {len(clients)} biggest clients "
+                   f"{'has' if busy == 1 else 'have'} more in the pipeline")
         if idle:
             summary += f"; {', '.join(idle)} {'has' if len(idle) == 1 else 'have'} nothing open"
         summary += "."
-        if any(_finance_label(f) for f in finances):
-            summary += " Margin is our average gross margin on their delivered campaigns"
-            if any(f and f.margin is not None and f.is_forecast for f in finances):
-                summary += " (* forecast: nothing delivered yet)"
-            summary += "."
     else:
         summary = "No deals were won in the last 12 months."
+    note = ""
+    if any(_finance_label(f) for f in finances):
+        note = "Margin is average gross margin on delivered campaigns."
+        if any(f and f.margin is not None and f.is_forecast for f in finances):
+            note += " * means nothing delivered yet, so it is the forecast margin."
     big = {
         "title": "Biggest Clients",
         "summary": summary,
+        "note": note,
         "clients": [
             {
                 "name": c.name,

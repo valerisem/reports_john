@@ -199,14 +199,28 @@ def test_each_chart_shows_a_year_in_quarters_ending_today(html_and_text):
         assert html.count(f">{label}</td>") == 2  # win rate and pipeline
 
 
-def test_each_section_says_what_it_means(html_and_text):
+def test_each_section_says_what_it_means_in_one_short_line(html_and_text):
     html, _ = html_and_text
-    assert ("Of the value of all deals closed in the last 13 weeks, we won 36%, "
-            "against 56% a year ago (down 1 point on last week).") in html
-    assert "Open deals with brands we have never won a deal with are worth £80k" in html
-    assert "on a year ago and up" in html
-    assert ("Our 2 biggest clients by value won in the last 12 months. 1 of them has another "
-            "programme in the pipeline; OldCo has nothing open.") in html
+    assert ("We won 36% of the value we closed in the last 3 months "
+            "(37% last week, 56% a year ago).") in html
+    assert "Open deals with new brands are worth £80k, up" in html
+    assert "on last week and up" in html and "on a year ago." in html
+    assert "1 of our 2 biggest clients has more in the pipeline; OldCo has nothing open." in html
+
+
+def test_the_margin_explanation_is_a_small_italic_note(data_with_margin):
+    html = data_with_margin
+    note = html.index("Margin is average gross margin on delivered campaigns.")
+    assert "font-style:italic" in html[note - 300:note]
+
+
+@pytest.fixture(scope="module")
+def data_with_margin():
+    from app.campaign_finance import BrandFinance
+    data = build_report(**fixture.load())
+    data.progress = _progress()
+    data.finance_by_brand = {"oldco.com": BrandFinance(campaigns=1, revenue_gbp=100, cost_gbp=40)}
+    return render_email(data, title="T", greeting_name="John", sender_name="V")
 
 
 def test_client_name_comes_before_margin_then_won(html_and_text):

@@ -111,6 +111,9 @@ table,td,div,p,span,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;te
 </table></td></tr>
 {%- endif %}
 <tr><td class="pad" style="padding:18px 40px 0;"><div style="{{ cell_label() }}font-size:14px;line-height:21px;color:#2b2a35;text-align:center;">{{ s.summary }}</div></td></tr>
+{%- if s.note %}
+<tr><td class="pad" style="padding:10px 40px 0;{{ cell_label() }}font-size:10px;line-height:15px;font-style:italic;color:#9a99a5;text-align:center;">{{ s.note }}</td></tr>
+{%- endif %}
 {%- if s.new_column %}
 <tr><td class="pad" style="padding:28px 40px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 <tr><td colspan="2" style="padding:0 0 10px;{{ cell_label() }}font-size:15px;line-height:20px;font-weight:700;color:#e91e8c;">{{ s.new_column.heading }}</td></tr>
