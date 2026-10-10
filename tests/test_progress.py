@@ -201,7 +201,7 @@ def test_each_chart_shows_a_year_in_quarters_ending_today(html_and_text):
 
 def test_each_section_says_what_it_means_in_one_short_line(html_and_text):
     html, _ = html_and_text
-    assert ("We won 36% of the value we closed in the last 3 months "
+    assert ("Of £100k in deals won or lost in the last 3 months, we won £36k: 36% "
             "(37% last week, 56% a year ago).") in html
     assert "Open deals with new brands are worth £80k, up" in html
     assert "on last week and up" in html and "on a year ago." in html

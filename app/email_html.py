@@ -294,10 +294,13 @@ def _progress_section(data: ReportData, new_column: dict) -> dict | None:
     week_rate = progress.last_week_win_rate.rate if progress.last_week_win_rate else None
     weeks = progress.win_rate_weeks
     window = f"{weeks // 13 * 3} months" if weeks % 13 == 0 else f"{weeks} weeks"
+    current = win_rates[-1]
     if now_rate is None:
-        summary = f"Nothing closed in the last {window}."
+        summary = f"No deals were won or lost in the last {window}."
     else:
-        summary = f"We won {percent(now_rate)} of the value we closed in the last {window}"
+        decided = current.won_gbp + current.lost_gbp
+        summary = (f"Of {compact_gbp(decided)} in deals won or lost in the last {window}, "
+                   f"we won {compact_gbp(current.won_gbp)}: {percent(now_rate)}")
         before = [f"{percent(r)} {when}" for r, when in
                   ((week_rate, "last week"), (year_rate, "a year ago")) if r is not None]
         if before:
