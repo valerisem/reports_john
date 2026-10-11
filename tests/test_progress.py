@@ -167,6 +167,7 @@ def _progress():
         last_week_win_rate=progress.WinRate(weeks[-1], 0.37, 0, 0), win_rate_weeks=13,
         clients=[progress.BigClient("oldco.com", "OldCo", 9e4, 3, 1, 0, 0.0),
                  progress.BigClient("bigco.com", "BigCo", 7e4, 2, 2, 1, 2e4)],
+        lost_reasons=[("Price too high", 3e4, 3), ("No response / went cold", 1e4, 1)],
     )
 
 
@@ -297,3 +298,67 @@ def test_collect_progress_builds_the_whole_section(monkeypatch):
 def _with(data, result):
     data.progress = result
     return data
+
+
+# -- lost reasons and pies ---------------------------------------------------
+def test_free_text_reasons_land_in_the_fixed_categories():
+    from app.lost_reasons import categorise
+    assert categorise("Budget") == "Price too high"
+    assert categorise("ghosted") == "No response / went cold"
+    assert categorise("chose another agency, they were cheaper") == "Lost to competitor"
+    assert categorise("She blanked us, her budgets would never let her work with an agency") \
+        == "No response / went cold"
+    assert categorise("Project on hold") == "Timing / Not ready yet"
+    assert categorise("Not shortlisted after RFI") == "Procurement / Legal issue"
+    assert categorise("procurement / legal issue") == "Procurement / Legal issue"
+
+
+def test_no_reason_or_an_unplaceable_one_stays_out_of_the_pie():
+    from app.lost_reasons import categorise
+    assert categorise("") is None and categorise(None) is None
+    assert categorise("super rude, do not know what they want") is None
+    lost = _closed([
+        {"id": 1, "title": "a", "org_id": 1, "lost_time": "2026-09-01 10:00:00", "value": 3000,
+         "currency": "GBP", "lost_reason": "Budget"},
+        {"id": 2, "title": "b", "org_id": 1, "lost_time": "2026-09-02 10:00:00", "value": 9000,
+         "currency": "GBP", "lost_reason": ""},
+        {"id": 3, "title": "c", "org_id": 1, "lost_time": "2026-09-03 10:00:00", "value": 1000,
+         "currency": "GBP", "lost_reason": "ghosted"},
+        {"id": 4, "title": "d", "org_id": 1, "lost_time": "2025-01-03 10:00:00", "value": 5000,
+         "currency": "GBP", "lost_reason": "Budget"},  # outside the window
+    ], "lost_time")
+    assert progress.lost_by_reason(lost, dt.date(2026, 10, 10), 13) == [
+        ("Price too high", 3000.0, 1), ("No response / went cold", 1000.0, 1)]
+
+
+def test_win_rate_shows_won_against_lost_and_why_we_lost(html_and_text):
+    html, _ = html_and_text
+    section = html[html.index(">Win Rate</div>"):html.index(">New Business Pipeline</div>")]
+    assert "Won vs lost, last 3 months" in section and "Why we lost" in section
+    assert section.count("data:image/png;base64,") == 2
+    assert ">Price too high<" in section and ">75%<" in section  # 30k of 40k with a reason
+    assert ">No response / went cold<" in section and ">25%<" in section
+
+
+def test_a_sent_email_carries_the_pies_as_inline_images():
+    from app.mailer import build_message
+    data = build_report(**fixture.load())
+    data.progress = _progress()
+    images: dict = {}
+    html = render_email(data, title="T", greeting_name="J", sender_name="V", images=images)
+    assert set(images) == {"won-lost", "lost-reasons"}
+    assert 'src="cid:won-lost"' in html and "base64" not in html
+    message = build_message(sender="a@b.c", sender_name="V", to=["j@x.y"], cc=[], subject="S",
+                            html_body=html, text_body="t", attachment=("r.xlsx", b"x"),
+                            inline_images=images)
+    parts = {p.get("Content-ID"): p.get_content_type() for p in message.walk()}
+    assert parts["<won-lost>"] == "image/png" and parts["<lost-reasons>"] == "image/png"
+
+
+def test_a_pie_is_a_real_png():
+    from io import BytesIO
+    from PIL import Image
+    from app.pie import pie_png
+    image = Image.open(BytesIO(pie_png([(3, "#e91e8c"), (1, "#7c3aed")])))
+    assert image.format == "PNG" and image.size == (360, 360)
+    assert image.getpixel((0, 0))[3] == 0  # transparent corner, not a white square

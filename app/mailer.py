@@ -66,7 +66,10 @@ def build_message(
     html_body: str,
     text_body: str,
     attachment: tuple[str, bytes] | None = None,
+    inline_images: dict[str, bytes] | None = None,
 ) -> EmailMessage:
+    """``inline_images`` maps a content id to PNG bytes; the HTML refers to
+    each as ``cid:<id>``."""
     message = EmailMessage()
     message["From"] = f"{sender_name} <{sender}>" if sender_name else sender
     message["To"] = ", ".join(to)
@@ -75,6 +78,11 @@ def build_message(
     message["Subject"] = subject
     message.set_content(text_body)
     message.add_alternative(html_body, subtype="html")
+    if inline_images:
+        html_part = message.get_payload()[-1]
+        for cid, png in inline_images.items():
+            html_part.add_related(png, maintype="image", subtype="png", cid=f"<{cid}>",
+                                  filename=f"{cid}.png")
     if attachment:
         filename, payload = attachment
         message.add_attachment(

@@ -1,6 +1,7 @@
 """HTTP surface: health, previews and a manual trigger."""
 from __future__ import annotations
 
+import base64
 import logging
 from contextlib import asynccontextmanager
 
@@ -64,7 +65,13 @@ def _artefacts(settings: Settings):
 def preview_email() -> HTMLResponse:
     """The newsletter exactly as it will be sent, rendered in the browser."""
     settings = get_settings()
-    return HTMLResponse(_artefacts(settings).html)
+    artefacts = _artefacts(settings)
+    html = artefacts.html
+    # The sent email carries its pictures as attachments; a browser has none,
+    # so write each one into the page.
+    for cid, png in artefacts.images.items():
+        html = html.replace(f"cid:{cid}", "data:image/png;base64," + base64.b64encode(png).decode())
+    return HTMLResponse(html)
 
 
 @app.get("/preview/excel", dependencies=[Depends(require_admin)])

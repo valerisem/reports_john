@@ -35,7 +35,7 @@ summary line also says how the figure moved since last week.
 
 | Section | Measure |
 |---|---|
-| Win Rate | Won value ÷ (won + lost value) over a rolling 13 weeks |
+| Win Rate | Won value ÷ (won + lost value) over a rolling 13 weeks, with a won-vs-lost pie and a pie of lost reasons. Lost reasons are sorted into the categories of Pipedrive's lost-reason list (`app/lost_reasons.py`); deals with no reason, or one that fits no category, are left out of that pie |
 | New Business Pipeline | Weighted value of open deals with brands we have never won a deal with. "New this week" sits underneath |
 | Biggest Clients | Top 5 clients by value won in the last 12 months: margin, programmes (won deals) against the year before, and what is open now |
 

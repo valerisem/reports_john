@@ -1,6 +1,7 @@
 """Renders the newsletter HTML from the report data."""
 from __future__ import annotations
 
+import base64
 from pathlib import Path
 from typing import Callable
 
@@ -8,6 +9,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from .formatting import bar_percent, compact_gbp, first_name, percent, website_url
 from .model import EXISTING, NEW_BUSINESS, ReportData
+from .pie import pie_png
 
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
 
@@ -43,6 +45,23 @@ MGR_RANGE_PX = 44
 
 # Five, not ten: the weekly progress section above took the room.
 RETAINED_SHOWN = 5
+
+# Lost-reason pie: one fixed colour per category, so a reason keeps its
+# colour from one week's email to the next.
+REASON_COLOURS = {
+    "Price too high": "#e91e8c",
+    "No response / went cold": "#7c3aed",
+    "Lost to competitor": "#f472b6",
+    "No internal approval": "#a78bfa",
+    "Scope not a fit": "#9d174d",
+    "Timing / Not ready yet": "#4c1d95",
+    "Campaign cancelled": "#f9c6e2",
+    "Client went in-house": "#ddd6fe",
+    "Procurement / Legal issue": "#9a99a5",
+}
+WON_COLOUR = ACCENT_PURPLE
+LOST_COLOUR = "#d9d6e3"
+PIE_PX = 150
 
 # Weekly progress bar charts.
 CHART_PX = 64
@@ -279,7 +298,39 @@ def _versus(now: float, before: float, fmt: Callable[[float], str], *, flat: flo
     return f"{'up' if gap > 0 else 'down'} {fmt(abs(gap))}"
 
 
-def _progress_section(data: ReportData, new_column: dict) -> dict | None:
+def _image_src(name: str, png: bytes, images: dict | None) -> str:
+    """A ``cid:`` reference when the email is being sent, else a data URI.
+
+    A sent email carries its pictures as inline attachments, which every
+    client shows; a browser preview has no attachments, so it gets the
+    picture written into the page instead.
+    """
+    if images is None:
+        return "data:image/png;base64," + base64.b64encode(png).decode()
+    images[name] = png
+    return f"cid:{name}"
+
+
+def _pie(name: str, title: str, rows: list[tuple[str, float, str]],
+         images: dict | None) -> dict | None:
+    """A pie and its legend from ``(label, value, colour)`` rows."""
+    total = sum(value for _, value, _ in rows)
+    if total <= 0:
+        return None
+    return {
+        "title": title,
+        "src": _image_src(name, pie_png([(v, c) for _, v, c in rows]), images),
+        "size": PIE_PX,
+        "legend": [
+            {"label": label, "colour": colour, "value": compact_gbp(value),
+             "share": percent(value / total)}
+            for label, value, colour in rows
+        ],
+    }
+
+
+def _progress_section(data: ReportData, new_column: dict,
+                      images: dict | None = None) -> dict | None:
     """Win rate, new-brand pipeline and biggest clients, each with a line on what it means."""
     progress = data.progress
     if progress is None:
@@ -310,6 +361,15 @@ def _progress_section(data: ReportData, new_column: dict) -> dict | None:
         "chart": _chart([(label, w.rate or 0.0) for label, w in zip(labels, win_rates)],
                         series="purple", fmt=percent),
         "summary": summary,
+        "pies": [pie for pie in (
+            _pie("won-lost", f"Won vs lost, last {window}",
+                 [("Won", current.won_gbp, WON_COLOUR), ("Lost", current.lost_gbp, LOST_COLOUR)],
+                 images),
+            _pie("lost-reasons", "Why we lost",
+                 [(reason, value, REASON_COLOURS.get(reason, "#9a99a5"))
+                  for reason, value, _ in progress.lost_reasons],
+                 images),
+        ) if pie],
     }
 
     # -- new-brand pipeline --------------------------------------------------
@@ -393,7 +453,10 @@ def render_email(
     footer_image_url: str = FOOTER_IMAGE_URL,
     logo_url: str = LOGO_URL,
     owner_photo_url_template: str = OWNER_PHOTO_URL_TEMPLATE,
+    images: dict | None = None,
 ) -> str:
+    """The email HTML. Pass ``images`` to collect its pictures for sending;
+    leave it out to have them written into the page, as a preview needs."""
     stage_rows = [row for row in data.by_stage() if row["deals"]]
     owner_rows = [row for row in data.by_owner() if row["deals"]]
 
@@ -444,7 +507,7 @@ def render_email(
     }
 
     context = {
-        "progress": _progress_section(data, new_column),
+        "progress": _progress_section(data, new_column, images),
         "title": title,
         "greeting_name": greeting_name,
         "sender_name": sender_name,

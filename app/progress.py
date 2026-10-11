@@ -17,11 +17,12 @@ A week ends on Sunday. "Now" is the live position on the report date.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Callable
 
 from .brands import Brand
+from .lost_reasons import categorise
 from .model import brand_from_deal_title
 from .pipeline_trend import (
     Snapshot, _as_datetime, _as_float, end_of, is_test_deal, months_before,
@@ -208,6 +209,27 @@ def win_rate(won: list[Closed], lost: list[Closed], on: date, weeks: int) -> Win
     return WinRate(on, (won_gbp / total) if total else None, won_gbp, lost_gbp)
 
 
+def lost_by_reason(lost: list[Closed], on: date, weeks: int) -> list[tuple[str, float, int]]:
+    """Lost value per lost-reason category over the ``weeks`` up to ``on``.
+
+    Deals with no reason, or one that fits no category, are left out, so the
+    shares add up to everything that does have a reason. Biggest first.
+    """
+    end = end_of(on)
+    start = end - timedelta(weeks=weeks)
+    totals: dict[str, list] = {}
+    for c in lost:
+        if not (start < c.on <= end):
+            continue
+        category = categorise(c.deal.get("lost_reason"))
+        if category is None:
+            continue
+        row = totals.setdefault(category, [0.0, 0])
+        row[0] += c.value_gbp
+        row[1] += 1
+    return sorted(((k, v[0], v[1]) for k, v in totals.items()), key=lambda r: (-r[1], r[0]))
+
+
 # -- big clients -----------------------------------------------------------
 @dataclass
 class BigClient:
@@ -260,6 +282,8 @@ class Progress:
     last_week_win_rate: WinRate | None
     win_rate_weeks: int
     clients: list[BigClient]
+    # Lost value by reason over the win-rate window: (category, gbp, deals).
+    lost_reasons: list[tuple[str, float, int]] = field(default_factory=list)
     fresh_weeks: int = 0  # worked out this run rather than read from the cache
 
     @property

@@ -26,6 +26,8 @@ class Artefacts:
     text: str
     workbook: bytes
     filename: str
+    # Pictures the HTML refers to as cid:<name>, sent as inline attachments.
+    images: dict[str, bytes]
     subject: str
     to: list[str]
     cc: list[str]
@@ -94,6 +96,7 @@ def _collect_progress(settings: Settings, client: PipedriveClient, data: ReportD
                 {b.brand_key: (b.open_deals, b.weighted_gbp) for b in data.brands if b.brand_key},
                 settings.big_client_count,
             ),
+            lost_reasons=progress.lost_by_reason(lost, report_date, window),
             fresh_weeks=len(fresh),
         )
         return result
@@ -195,8 +198,10 @@ def build(settings: Settings, data: ReportData) -> Artefacts:
     if settings.test_mode:
         banner = {"to": ", ".join(settings.mail_to), "cc": ", ".join(settings.mail_cc)}
 
+    images: dict[str, bytes] = {}
     html = email_html.render_email(
         data,
+        images=images,
         title=settings.report_title,
         greeting_name=settings.report_greeting_name,
         sender_name=settings.report_sender_name,
@@ -227,6 +232,7 @@ def build(settings: Settings, data: ReportData) -> Artefacts:
         text=text,
         workbook=workbook,
         filename=filename,
+        images=images,
         subject=subject,
         to=to,
         cc=cc,
@@ -249,6 +255,7 @@ def send(settings: Settings, artefacts: Artefacts) -> str:
         html_body=artefacts.html,
         text_body=artefacts.text,
         attachment=(artefacts.filename, artefacts.workbook),
+        inline_images=artefacts.images,
     )
     return mailer.send(
         transport=settings.mail_transport,
