@@ -51,13 +51,26 @@ def pie_png(slices: list[tuple[float, str]], *, size: int = SIZE) -> bytes:
     return out.getvalue()
 
 
+def _wrap(text: str, limit: int) -> list[str]:
+    """One line, or two broken at the space nearest the middle."""
+    if len(text) <= limit or " " not in text:
+        return [text]
+    if " / " in text:  # "No response / went cold" breaks after the slash
+        head, tail = text.split(" / ", 1)
+        return [head + " /", tail]
+    spaces = [i for i, ch in enumerate(text) if ch == " "]
+    cut = min(spaces, key=lambda i: abs(i - len(text) / 2))
+    return [text[:cut], text[cut + 1:]]
+
+
 def _share(value: float, total: float) -> str:
     pct = value / total * 100
     return "<1%" if 0 < pct < 1 else f"{round(pct)}%"
 
 
-def labelled_pie_png(rows: list[tuple[str, float, str]], *, radius: int = 78,
-                     font_px: int = 12, scale: int = 2) -> tuple[bytes, int, int]:
+def labelled_pie_png(rows: list[tuple[str, float, str]], *, radius: int = 66,
+                     font_px: int = 13, wrap: int = 14,
+                     scale: int = 2) -> tuple[bytes, int, int]:
     """A pie with each slice named beside it: a thin line out to small text.
 
     ``rows`` are ``(label, value, "#rrggbb")``, drawn clockwise from twelve
@@ -67,15 +80,17 @@ def labelled_pie_png(rows: list[tuple[str, float, str]], *, radius: int = 78,
     rows = [row for row in rows if row[1] > 0]
     total = sum(value for _, value, _ in rows)
     font = ImageFont.load_default(size=font_px * scale)
-    line_h = round(font_px * 1.4)
+    line_h = round(font_px * 1.25)
+    gap = 5
 
     labels = []
     angle = -90.0
     for label, value, _ in rows:
         sweep = 360.0 * value / total
         mid = math.radians(angle + sweep / 2)
-        labels.append({"mid": mid, "name": label, "share": _share(value, total),
-                       "right": math.cos(mid) >= 0})
+        lines = _wrap(label, wrap)
+        labels.append({"mid": mid, "lines": lines, "share": _share(value, total),
+                       "right": math.cos(mid) >= 0, "h": line_h * len(lines)})
         angle += sweep
 
     # Each side's labels, top to bottom, as near as they can sit to where
@@ -85,8 +100,9 @@ def labelled_pie_png(rows: list[tuple[str, float, str]], *, radius: int = 78,
         group = sorted((l for l in labels if l["right"] == side), key=lambda l: math.sin(l["mid"]))
         floor = -math.inf
         for l in group:
-            l["y"] = max((radius + 12) * math.sin(l["mid"]), floor)
-            floor = l["y"] + line_h
+            # ``y`` is the label's vertical middle, where its line arrives
+            l["y"] = max((radius + 12) * math.sin(l["mid"]), floor + l["h"] / 2)
+            floor = l["y"] + l["h"] / 2 + gap
         if group:
             # a stack pushed off the bottom slides back up, as far as there is room
             overflow = group[-1]["y"] - (radius + 6)
@@ -94,9 +110,10 @@ def labelled_pie_png(rows: list[tuple[str, float, str]], *, radius: int = 78,
             for l in group:
                 l["y"] -= min(max(overflow, 0), max(room, 0))
 
-    top = min([l["y"] - line_h / 2 for l in labels] + [-radius]) - 6
-    bottom = max([l["y"] + line_h / 2 for l in labels] + [radius]) + 6
-    longest = max((font.getlength(f"{l['name']}  {l['share']}") / scale for l in labels), default=0)
+    top = min([l["y"] - l["h"] / 2 for l in labels] + [-radius]) - 6
+    bottom = max([l["y"] + l["h"] / 2 for l in labels] + [radius]) + 6
+    longest = max((font.getlength(line + ("  " + l["share"] if i == len(l["lines"]) - 1 else "")) / scale
+                   for l in labels for i, line in enumerate(l["lines"])), default=0)
     reach = radius + 18 + 14 + 5          # pie edge, elbow, tail, gap before text
     width = int(2 * (reach + longest + 4))
     height = int(bottom - top)
@@ -119,12 +136,16 @@ def labelled_pie_png(rows: list[tuple[str, float, str]], *, radius: int = 78,
         draw.line([(rim[0] * s, rim[1] * s), (stub[0] * s, stub[1] * s),
                    (elbow_x * s, y * s), (end_x * s, y * s)], fill=RULE, width=s)
 
-        name, share = l["name"] + "  ", l["share"]
-        text_w = draw.textlength(name + share, font=font)
-        x = (end_x + 5) * s if l["right"] else (end_x - 5) * s - text_w
-        text_top = (y - font_px * 0.6) * s
-        draw.text((x, text_top), name, font=font, fill=LABEL)
-        draw.text((x + draw.textlength(name, font=font), text_top), share, font=font, fill=FIGURE)
+        for i, line in enumerate(l["lines"]):
+            last = i == len(l["lines"]) - 1
+            name, share = (line + "  ", l["share"]) if last else (line, "")
+            text_w = draw.textlength(name + share, font=font)
+            x = (end_x + 5) * s if l["right"] else (end_x - 5) * s - text_w
+            text_top = (y - l["h"] / 2 + i * line_h + (line_h - font_px) / 2 - 1) * s
+            draw.text((x, text_top), name, font=font, fill=LABEL)
+            if share:
+                draw.text((x + draw.textlength(name, font=font), text_top), share,
+                          font=font, fill=FIGURE)
 
     out = BytesIO()
     image.save(out, format="PNG", optimize=True)
