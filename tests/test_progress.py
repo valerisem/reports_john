@@ -331,11 +331,11 @@ def test_no_reason_or_an_unplaceable_one_stays_out_of_the_pie():
         ("Price too high", 3000.0, 1), ("No response / went cold", 1000.0, 1)]
 
 
-def test_win_rate_shows_won_against_lost_and_why_we_lost(html_and_text):
+def test_win_rate_shows_why_we_lost(html_and_text):
     html, _ = html_and_text
     section = html[html.index(">Win Rate</div>"):html.index(">New Business Pipeline</div>")]
-    assert "Won vs lost, last 3 months" in section and "Why we lost" in section
-    assert section.count("data:image/png;base64,") == 2
+    assert "Why we lost" in section and "Won vs lost" not in section
+    assert section.count("data:image/png;base64,") == 1
     assert ">Price too high<" in section and ">75%<" in section  # 30k of 40k with a reason
     assert ">No response / went cold<" in section and ">25%<" in section
 
@@ -346,13 +346,13 @@ def test_a_sent_email_carries_the_pies_as_inline_images():
     data.progress = _progress()
     images: dict = {}
     html = render_email(data, title="T", greeting_name="J", sender_name="V", images=images)
-    assert set(images) == {"won-lost", "lost-reasons"}
-    assert 'src="cid:won-lost"' in html and "base64" not in html
+    assert set(images) == {"lost-reasons"}
+    assert 'src="cid:lost-reasons"' in html and "base64" not in html
     message = build_message(sender="a@b.c", sender_name="V", to=["j@x.y"], cc=[], subject="S",
                             html_body=html, text_body="t", attachment=("r.xlsx", b"x"),
                             inline_images=images)
     parts = {p.get("Content-ID"): p.get_content_type() for p in message.walk()}
-    assert parts["<won-lost>"] == "image/png" and parts["<lost-reasons>"] == "image/png"
+    assert parts["<lost-reasons>"] == "image/png"
 
 
 def test_a_pie_is_a_real_png():

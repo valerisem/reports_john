@@ -59,8 +59,6 @@ REASON_COLOURS = {
     "Client went in-house": "#ddd6fe",
     "Procurement / Legal issue": "#9a99a5",
 }
-WON_COLOUR = ACCENT_PURPLE
-LOST_COLOUR = "#d9d6e3"
 PIE_PX = 150
 
 # Weekly progress bar charts.
@@ -362,9 +360,6 @@ def _progress_section(data: ReportData, new_column: dict,
                         series="purple", fmt=percent),
         "summary": summary,
         "pies": [pie for pie in (
-            _pie("won-lost", f"Won vs lost, last {window}",
-                 [("Won", current.won_gbp, WON_COLOUR), ("Lost", current.lost_gbp, LOST_COLOUR)],
-                 images),
             _pie("lost-reasons", "Why we lost",
                  [(reason, value, REASON_COLOURS.get(reason, "#9a99a5"))
                   for reason, value, _ in progress.lost_reasons],

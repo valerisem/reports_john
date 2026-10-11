@@ -114,7 +114,7 @@ table,td,div,p,span,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;te
 {%- if s.pies %}
 <tr><td class="pad" style="padding:26px 40px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
 {%- for pie in s.pies %}
-<td class="stack{% if not loop.first %} gap{% endif %}" width="50%" valign="top" align="center" style="padding:0 8px;text-align:center;">
+<td class="stack{% if not loop.first %} gap{% endif %}" width="{{ 100 // s.pies|length }}%" valign="top" align="center" style="padding:0 8px;text-align:center;">
 <div style="{{ cell_label() }}font-size:14px;line-height:20px;font-weight:700;color:#15141f;padding-bottom:12px;">{{ pie.title }}</div>
 <img src="{{ pie.src }}" width="{{ pie.size }}" height="{{ pie.size }}" alt="{{ pie.title }}" style="display:block;width:{{ pie.size }}px;height:{{ pie.size }}px;border:0;margin:0 auto;">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:14px auto 0;">
