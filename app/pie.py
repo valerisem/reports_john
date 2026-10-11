@@ -71,81 +71,92 @@ def _share(value: float, total: float) -> str:
 def labelled_pie_png(rows: list[tuple[str, float, str]], *, radius: int = 66,
                      font_px: int = 13, wrap: int = 14,
                      scale: int = 2) -> tuple[bytes, int, int]:
-    """A pie with each slice named beside it: a thin line out to small text.
+    """A pie with each slice named beside it: one straight line out to small text.
 
     ``rows`` are ``(label, value, "#rrggbb")``, drawn clockwise from twelve
-    o'clock. Each label gives the slice's share only. Returns the PNG and the
-    width and height to show it at (the file is ``scale`` times that).
+    o'clock. Each line points straight out from the middle of its slice and
+    the label sits at its end, giving the slice's share only. Where two
+    labels would collide the later line is drawn longer, never bent. Returns
+    the PNG and the width and height to show it at (the file is ``scale``
+    times that).
     """
     rows = [row for row in rows if row[1] > 0]
     total = sum(value for _, value, _ in rows)
-    font = ImageFont.load_default(size=font_px * scale)
+    measure = ImageFont.load_default(size=font_px)
     line_h = round(font_px * 1.25)
-    gap = 5
+    pad = 3  # clear space kept around each label
 
+    # Lay out in pie-centred coordinates, at the size it will be shown.
     labels = []
     angle = -90.0
     for label, value, _ in rows:
         sweep = 360.0 * value / total
         mid = math.radians(angle + sweep / 2)
         lines = _wrap(label, wrap)
-        labels.append({"mid": mid, "lines": lines, "share": _share(value, total),
-                       "right": math.cos(mid) >= 0, "h": line_h * len(lines)})
+        share = _share(value, total)
+        widths = [measure.getlength(line + ("  " + share if i == len(lines) - 1 else ""))
+                  for i, line in enumerate(lines)]
+        labels.append({"mid": mid, "lines": lines, "share": share,
+                       "right": math.cos(mid) >= 0, "w": max(widths),
+                       "h": line_h * len(lines)})
         angle += sweep
 
-    # Each side's labels, top to bottom, as near as they can sit to where
-    # their slice points without overlapping. Positions are relative to the
-    # centre of the pie; the picture is sized around them afterwards.
-    for side in (True, False):
-        group = sorted((l for l in labels if l["right"] == side), key=lambda l: math.sin(l["mid"]))
-        floor = -math.inf
-        for l in group:
-            # ``y`` is the label's vertical middle, where its line arrives
-            l["y"] = max((radius + 12) * math.sin(l["mid"]), floor + l["h"] / 2)
-            floor = l["y"] + l["h"] / 2 + gap
-        if group:
-            # a stack pushed off the bottom slides back up, as far as there is room
-            overflow = group[-1]["y"] - (radius + 6)
-            room = group[0]["y"] - (-radius - 6)
-            for l in group:
-                l["y"] -= min(max(overflow, 0), max(room, 0))
+    placed: list[tuple[float, float, float, float]] = []
+    pie_box = (-radius, -radius, radius, radius)
 
-    top = min([l["y"] - l["h"] / 2 for l in labels] + [-radius]) - 6
-    bottom = max([l["y"] + l["h"] / 2 for l in labels] + [radius]) + 6
-    longest = max((font.getlength(line + ("  " + l["share"] if i == len(l["lines"]) - 1 else "")) / scale
-                   for l in labels for i, line in enumerate(l["lines"])), default=0)
-    reach = radius + 18 + 14 + 5          # pie edge, elbow, tail, gap before text
-    width = int(2 * (reach + longest + 4))
-    height = int(bottom - top)
-    cx, cy = width / 2, -top
+    def clashes(box):
+        return any(not (box[2] < b[0] or box[0] > b[2] or box[3] < b[1] or box[1] > b[3])
+                   for b in placed)
 
-    s = scale
-    image = Image.new("RGBA", (width * s, height * s), (255, 255, 255, 0))
-    pie = Image.open(BytesIO(pie_png([(v, c) for _, v, c in rows], size=2 * radius * s)))
-    image.alpha_composite(pie, (round((cx - radius) * s), round((cy - radius) * s)))
-
-    draw = ImageDraw.Draw(image)
     for l in labels:
-        side = 1 if l["right"] else -1
-        y = cy + l["y"]
         cos, sin = math.cos(l["mid"]), math.sin(l["mid"])
-        rim = (cx + radius * cos, cy + radius * sin)
-        stub = (cx + (radius + 8) * cos, cy + (radius + 8) * sin)
-        elbow_x = cx + side * max(radius + 18, side * (stub[0] - cx))
-        end_x = elbow_x + side * 14
-        draw.line([(rim[0] * s, rim[1] * s), (stub[0] * s, stub[1] * s),
-                   (elbow_x * s, y * s), (end_x * s, y * s)], fill=RULE, width=s)
+        reach = 14
+        while True:
+            end = ((radius + reach) * cos, (radius + reach) * sin)
+            x0 = end[0] + 4 if l["right"] else end[0] - 4 - l["w"]
+            box = (x0 - pad, end[1] - l["h"] / 2 - pad, x0 + l["w"] + pad, end[1] + l["h"] / 2 + pad)
+            inside_pie = not (box[2] < pie_box[0] or box[0] > pie_box[2]
+                              or box[3] < pie_box[1] or box[1] > pie_box[3]) and \
+                min(abs(box[0]), abs(box[2])) < radius * abs(cos) + 2
+            if (not clashes(box) and not inside_pie) or reach > 4 * radius:
+                break
+            reach += 4
+        l["end"], l["x0"], l["box"] = end, x0, box
+        placed.append(box)
 
+    left = min([b[0] for b in placed] + [-radius]) - 2
+    right = max([b[2] for b in placed] + [radius]) + 2
+    top = min([b[1] for b in placed] + [-radius]) - 2
+    bottom = max([b[3] for b in placed] + [radius]) + 2
+    # keep the pie in the middle of the picture so it lines up with the page
+    half = max(-left, right)
+    width, height = int(2 * half), int(bottom - top)
+    cx, cy = half, -top
+
+    # Everything is drawn SUPERSAMPLE times larger again and shrunk at the
+    # end, which is what keeps the thin lines and the text smooth.
+    k = scale * SUPERSAMPLE
+    image = Image.new("RGBA", (width * k, height * k), (255, 255, 255, 0))
+    pie = Image.open(BytesIO(pie_png([(v, c) for _, v, c in rows], size=2 * radius * k)))
+    image.alpha_composite(pie, (round((cx - radius) * k), round((cy - radius) * k)))
+    draw = ImageDraw.Draw(image)
+    font = ImageFont.load_default(size=font_px * k)
+    for l in labels:
+        cos, sin = math.cos(l["mid"]), math.sin(l["mid"])
+        start = (cx + (radius + 2) * cos, cy + (radius + 2) * sin)
+        end = (cx + l["end"][0], cy + l["end"][1])
+        draw.line([(start[0] * k, start[1] * k), (end[0] * k, end[1] * k)], fill=RULE, width=k)
         for i, line in enumerate(l["lines"]):
             last = i == len(l["lines"]) - 1
             name, share = (line + "  ", l["share"]) if last else (line, "")
-            text_w = draw.textlength(name + share, font=font)
-            x = (end_x + 5) * s if l["right"] else (end_x - 5) * s - text_w
-            text_top = (y - l["h"] / 2 + i * line_h + (line_h - font_px) / 2 - 1) * s
-            draw.text((x, text_top), name, font=font, fill=LABEL)
+            text_w = draw.textlength(name + share, font=font) / k
+            x = cx + l["x0"] + (0 if l["right"] else l["w"] - text_w)
+            y = cy + l["end"][1] - l["h"] / 2 + i * line_h + (line_h - font_px) / 2 - 1
+            draw.text((x * k, y * k), name, font=font, fill=LABEL)
             if share:
-                draw.text((x + draw.textlength(name, font=font), text_top), share,
+                draw.text(((x + draw.textlength(name, font=font) / k) * k, y * k), share,
                           font=font, fill=FIGURE)
+    image = image.resize((width * scale, height * scale), Image.LANCZOS)
 
     out = BytesIO()
     image.save(out, format="PNG", optimize=True)
