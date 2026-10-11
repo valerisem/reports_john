@@ -9,7 +9,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from .formatting import bar_percent, compact_gbp, first_name, percent, website_url
 from .model import EXISTING, NEW_BUSINESS, ReportData
-from .pie import pie_png
+from .pie import labelled_pie_png
 
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
 
@@ -59,7 +59,10 @@ REASON_COLOURS = {
     "Client went in-house": "#ddd6fe",
     "Procurement / Legal issue": "#9a99a5",
 }
-PIE_PX = 150
+# Reasons below this share of the pie are grouped as "Other" and listed in a
+# footnote rather than given a slice label each.
+MINOR_SHARE = 0.05
+OTHER_COLOUR = "#d9d6e3"
 
 # Weekly progress bar charts.
 CHART_PX = 64
@@ -310,20 +313,29 @@ def _image_src(name: str, png: bytes, images: dict | None) -> str:
 
 
 def _pie(name: str, title: str, rows: list[tuple[str, float, str]],
-         images: dict | None) -> dict | None:
-    """A pie and its legend from ``(label, value, colour)`` rows."""
+          images: dict | None) -> dict | None:
+    """A labelled pie from ``(label, value, colour)`` rows.
+
+    Slices under ``MINOR_SHARE`` are too thin to label, so they are drawn as
+    one grey "Other" slice and named in a footnote underneath instead.
+    """
     total = sum(value for _, value, _ in rows)
     if total <= 0:
         return None
+    major = [row for row in rows if row[1] / total >= MINOR_SHARE]
+    minor = [row for row in rows if row[1] / total < MINOR_SHARE]
+    drawn = major + ([("Other", sum(v for _, v, _ in minor), OTHER_COLOUR)] if minor else [])
+    png, width, height = labelled_pie_png(drawn)
     return {
         "title": title,
-        "src": _image_src(name, pie_png([(v, c) for _, v, c in rows]), images),
-        "size": PIE_PX,
-        "legend": [
-            {"label": label, "colour": colour, "value": compact_gbp(value),
-             "share": percent(value / total)}
-            for label, value, colour in rows
-        ],
+        "src": _image_src(name, png, images),
+        "width": width,
+        "height": height,
+        "alt": title + ": " + ", ".join(f"{label} {percent(v / total)}" for label, v, _ in drawn),
+        "footnote": (
+            f"Other, each under {round(MINOR_SHARE * 100)}%: "
+            + ", ".join(f"{label} {percent(v / total)}" for label, v, _ in minor) + "."
+        ) if minor else "",
     }
 
 
@@ -586,7 +598,9 @@ def plain_text_fallback(data: ReportData, greeting_name: str, sender_name: str) 
                 + f", {c['programmes']}, {c['open']}"
                 for c in block.get("clients", [])
             ]
-            lines += [f"  {block['summary']}", ""]
+            lines.append(f"  {block['summary']}")
+            lines += [f"  {pie['alt']}" for pie in block.get("pies", [])]
+            lines.append("")
     lines += [
         "Weighted pipeline leaderboard",
     ]

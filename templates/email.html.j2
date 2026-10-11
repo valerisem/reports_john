@@ -116,15 +116,10 @@ table,td,div,p,span,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;te
 {%- for pie in s.pies %}
 <td class="stack{% if not loop.first %} gap{% endif %}" width="{{ 100 // s.pies|length }}%" valign="top" align="center" style="padding:0 8px;text-align:center;">
 <div style="{{ cell_label() }}font-size:14px;line-height:20px;font-weight:700;color:#15141f;padding-bottom:12px;">{{ pie.title }}</div>
-<img src="{{ pie.src }}" width="{{ pie.size }}" height="{{ pie.size }}" alt="{{ pie.title }}" style="display:block;width:{{ pie.size }}px;height:{{ pie.size }}px;border:0;margin:0 auto;">
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:14px auto 0;">
-{%- for row in pie.legend %}
-<tr><td valign="middle" style="padding:3px 8px 3px 0;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td width="10" height="10" bgcolor="{{ row.colour }}" style="width:10px;height:10px;background-color:{{ row.colour }};border-radius:2px;font-size:1px;line-height:1px;">&#8203;</td></tr></table></td>
-<td valign="middle" style="padding:3px 12px 3px 0;{{ cell_label() }}font-size:13px;line-height:18px;color:#2b2a35;text-align:left;">{{ row.label }}</td>
-<td valign="middle" align="right" style="padding:3px 8px 3px 0;{{ cell_label() }}font-size:13px;line-height:18px;font-weight:700;color:#15141f;text-align:right;white-space:nowrap;">{{ row.share }}</td>
-<td valign="middle" align="right" style="padding:3px 0;{{ cell_label() }}font-size:12px;line-height:18px;color:#9a99a5;text-align:right;white-space:nowrap;">{{ row.value }}</td></tr>
-{%- endfor %}
-</table>
+<img src="{{ pie.src }}" width="{{ pie.width }}" alt="{{ pie.alt }}" style="display:block;width:100%;max-width:{{ pie.width }}px;height:auto;border:0;margin:0 auto;">
+{%- if pie.footnote %}
+<div style="{{ cell_label() }}font-size:10px;line-height:15px;font-style:italic;color:#9a99a5;padding-top:10px;">{{ pie.footnote }}</div>
+{%- endif %}
 </td>
 {%- endfor %}
 </tr></table></td></tr>

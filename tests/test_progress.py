@@ -331,13 +331,26 @@ def test_no_reason_or_an_unplaceable_one_stays_out_of_the_pie():
         ("Price too high", 3000.0, 1), ("No response / went cold", 1000.0, 1)]
 
 
-def test_win_rate_shows_why_we_lost(html_and_text):
-    html, _ = html_and_text
+def test_win_rate_shows_why_we_lost_as_a_labelled_pie(html_and_text):
+    html, text = html_and_text
     section = html[html.index(">Win Rate</div>"):html.index(">New Business Pipeline</div>")]
     assert "Why we lost" in section and "Won vs lost" not in section
     assert section.count("data:image/png;base64,") == 1
-    assert ">Price too high<" in section and ">75%<" in section  # 30k of 40k with a reason
-    assert ">No response / went cold<" in section and ">25%<" in section
+    # the labels are in the picture, not a list beside it, and carry no amounts
+    assert ">Price too high<" not in section and "£30k" not in section
+    assert 'alt="Why we lost: Price too high 75%, No response / went cold 25%"' in section
+    assert "Why we lost: Price too high 75%" in text
+
+
+def test_reasons_under_five_percent_become_other_with_a_footnote():
+    from app.email_html import _pie
+    rows = [("Price too high", 60.0, "#e91e8c"), ("Scope not a fit", 36.0, "#9d174d"),
+            ("Client went in-house", 3.0, "#ddd6fe"), ("Procurement / Legal issue", 1.0, "#9a99a5")]
+    pie = _pie("x", "Why we lost", rows, None)
+    assert pie["alt"] == "Why we lost: Price too high 60%, Scope not a fit 36%, Other 4%"
+    assert pie["footnote"] == ("Other, each under 5%: Client went in-house 3%, "
+                               "Procurement / Legal issue 1%.")
+    assert _pie("x", "t", rows[:2], None)["footnote"] == ""
 
 
 def test_a_sent_email_carries_the_pies_as_inline_images():
@@ -358,7 +371,11 @@ def test_a_sent_email_carries_the_pies_as_inline_images():
 def test_a_pie_is_a_real_png():
     from io import BytesIO
     from PIL import Image
-    from app.pie import pie_png
+    from app.pie import labelled_pie_png, pie_png
     image = Image.open(BytesIO(pie_png([(3, "#e91e8c"), (1, "#7c3aed")])))
     assert image.format == "PNG" and image.size == (360, 360)
     assert image.getpixel((0, 0))[3] == 0  # transparent corner, not a white square
+    png, width, height = labelled_pie_png([("Price too high", 3, "#e91e8c"),
+                                           ("No response / went cold", 1, "#7c3aed")])
+    labelled = Image.open(BytesIO(png))
+    assert labelled.size == (width * 2, height * 2) and width > 2 * 78
