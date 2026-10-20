@@ -386,7 +386,8 @@ def _progress_section(data: ReportData, new_column: dict,
         if point is not None:
             values.append((label, point.new.weighted_gbp(rates)))
     weighted = progress.now.new.weighted_gbp(rates)
-    summary = f"Open new business deals are worth {compact_gbp(weighted)}"
+    summary = (f"Open new business deals are worth {compact_gbp(weighted)} "
+               "weighted by stage probability")
     changes = []
     if progress.last_week is not None:
         changes.append(_versus(weighted, progress.last_week.new.weighted_gbp(rates),

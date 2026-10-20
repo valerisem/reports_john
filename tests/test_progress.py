@@ -204,7 +204,7 @@ def test_each_section_says_what_it_means_in_one_short_line(html_and_text):
     html, _ = html_and_text
     assert ("In the last 3 months we won £36k and lost £64k: a 36% win rate "
             "(37% last week, 56% a year ago).") in html
-    assert "Open new business deals are worth £80k, up" in html
+    assert "Open new business deals are worth £80k weighted by stage probability, up" in html
     assert "on last week and up" in html and "on a year ago." in html
     assert "1 of our 2 biggest clients has more in the pipeline; OldCo has nothing open." in html
 
