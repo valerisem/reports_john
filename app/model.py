@@ -618,7 +618,7 @@ def build_report(
     by_name = name_index(brands_by_org)
     unmatched_campaigns: list[str] = []
     for campaign_deal_id, campaign in finance.by_deal.items():
-        if campaign_deal_id in campaign_deal_orgs or not campaign.is_delivered:
+        if campaign_deal_id in campaign_deal_orgs or not campaign.is_marked_delivered:
             continue
         label = normalise_name(campaign.client_name)
         # An alias exists because somebody decided two names are one client,

@@ -529,7 +529,7 @@ from app.campaign_finance import CampaignFinanceSet, build_finance
 def test_bookings_prefixed_board_or_pay_are_ignored():
     """Those rows are creators listed on a board, never paid - no fee at all."""
     finance = build_finance(
-        [{"pd_deal_id": 5, "client_name": "X", "stage": "Delivered",
+        [{"pd_deal_id": 5, "client_name": "X", "stage": "Delivered", "delivered_date": "2026-01-31",
           "budget_gbp": 100_000, "current_spend_gbp": 40_000}],
         [{"campaign_number": "5", "fee_gbp": 30_000},
          {"campaign_number": "board:99", "fee_gbp": None},
@@ -542,7 +542,7 @@ def test_bookings_prefixed_board_or_pay_are_ignored():
 
 def test_cost_falls_back_to_board_spend_when_no_payments_exist():
     finance = build_finance(
-        [{"pd_deal_id": 7, "client_name": "X", "stage": "Delivered",
+        [{"pd_deal_id": 7, "client_name": "X", "stage": "Delivered", "delivered_date": "2026-01-31",
           "budget_gbp": 50_000, "current_spend_gbp": 20_000}],
         [],
     )
@@ -552,7 +552,7 @@ def test_cost_falls_back_to_board_spend_when_no_payments_exist():
 
 def test_margin_includes_paid_media_and_brand_uplift():
     finance = build_finance(
-        [{"pd_deal_id": 1, "client_name": "X", "stage": "Delivered", "budget_gbp": 100_000,
+        [{"pd_deal_id": 1, "client_name": "X", "stage": "Delivered", "delivered_date": "2026-01-31", "budget_gbp": 100_000,
           "paid_media_spend": 10_000, "brand_uplift_spend": 5_000}],
         [{"campaign_number": "1", "fee_gbp": 35_000}],
     )
@@ -574,9 +574,9 @@ def test_campaigns_still_running_are_left_out_of_margin():
 def test_duplicate_client_records_total_as_one_brand():
     """Opera, Opera Ltd and Opera Browser are one client, not three."""
     finance = build_finance(
-        [{"pd_deal_id": 11, "client_name": "Opera", "stage": "Delivered", "budget_gbp": 100_000},
-         {"pd_deal_id": 12, "client_name": "Opera Ltd", "stage": "Delivered", "budget_gbp": 100_000},
-         {"pd_deal_id": 13, "client_name": "Opera Browser", "stage": "Delivered", "budget_gbp": 100_000}],
+        [{"pd_deal_id": 11, "client_name": "Opera", "stage": "Delivered", "delivered_date": "2026-01-31", "budget_gbp": 100_000},
+         {"pd_deal_id": 12, "client_name": "Opera Ltd", "stage": "Delivered", "delivered_date": "2026-01-31", "budget_gbp": 100_000},
+         {"pd_deal_id": 13, "client_name": "Opera Browser", "stage": "Delivered", "delivered_date": "2026-01-31", "budget_gbp": 100_000}],
         [{"campaign_number": "11", "fee_gbp": 70_000},
          {"campaign_number": "12", "fee_gbp": 50_000},
          {"campaign_number": "13", "fee_gbp": 30_000}],
@@ -595,7 +595,7 @@ def test_margin_is_none_without_finance_data(data):
 def test_email_shows_margin_beside_the_value():
     payload = fixture.load()
     finance = build_finance(
-        [{"pd_deal_id": 1, "client_name": "X", "stage": "Delivered",
+        [{"pd_deal_id": 1, "client_name": "X", "stage": "Delivered", "delivered_date": "2026-01-31",
           "budget_gbp": 100_000, "current_spend_gbp": 40_000}],
         [{"campaign_number": "1", "fee_gbp": 40_000}],
     )
@@ -636,7 +636,7 @@ def test_an_ambiguous_client_name_is_dropped_not_guessed():
 def test_unmatched_campaigns_are_reported_not_hidden():
     payload = fixture.load()
     finance = build_finance(
-        [{"pd_deal_id": 999_999, "client_name": "Ghost Client Ltd", "stage": "Delivered",
+        [{"pd_deal_id": 999_999, "client_name": "Ghost Client Ltd", "stage": "Delivered", "delivered_date": "2026-01-31",
           "budget_gbp": 50_000, "current_spend_gbp": 20_000}],
         [],
     )
@@ -660,7 +660,7 @@ def test_a_running_campaign_uses_planned_spend_and_is_flagged():
 def test_delivered_campaigns_win_over_a_forecast():
     """A measured margin is never blended with a predicted one."""
     finance = build_finance(
-        [{"pd_deal_id": 1, "client_name": "X", "stage": "Delivered",
+        [{"pd_deal_id": 1, "client_name": "X", "stage": "Delivered", "delivered_date": "2026-01-31",
           "budget_gbp": 100_000, "current_spend_gbp": 60_000},
          {"pd_deal_id": 2, "client_name": "X", "stage": "WIP",
           "budget_gbp": 100_000, "planned_spend": 10_000}],
@@ -670,6 +670,51 @@ def test_delivered_campaigns_win_over_a_forecast():
     assert rolled.campaigns == 1
     assert rolled.is_forecast is False
     assert rolled.margin == pytest.approx(0.40)
+
+
+def test_delivered_without_a_date_is_a_forecast_not_a_final_margin():
+    """Runway SOW1 was marked Delivered while creators were still being paid."""
+    finance = build_finance(
+        [{"pd_deal_id": 1, "client_name": "X", "stage": "Delivered",
+          "budget_gbp": 100_000, "current_spend_gbp": 16_000, "planned_spend": 50_000},
+         {"pd_deal_id": 2, "client_name": "X", "stage": "WIP",
+          "budget_gbp": 100_000, "planned_spend": 50_000}],
+        [{"campaign_number": "1", "fee_gbp": 16_000}],
+    )
+    rolled = finance.roll_up({1, 2})
+    assert rolled.is_forecast is True
+    assert rolled.campaigns == 2
+    assert rolled.margin == pytest.approx(0.5)
+
+
+def test_board_spend_is_used_when_some_creators_have_no_fee():
+    finance = build_finance(
+        [{"pd_deal_id": 1, "client_name": "X", "stage": "Delivered", "delivered_date": "2026-01-31",
+          "budget_gbp": 100_000, "current_spend_gbp": 40_000}],
+        [{"campaign_number": "1", "fee_gbp": 16_000},
+         {"campaign_number": "1", "fee_gbp": None}],
+    )
+    assert finance.by_deal[1].influencer_cost_gbp == 40_000
+    assert finance.by_deal[1].costed_from_payments is False
+    assert finance.roll_up({1}).margin == pytest.approx(0.6)
+
+
+def test_complete_payments_win_over_a_higher_board_spend():
+    finance = build_finance(
+        [{"pd_deal_id": 1, "client_name": "X", "stage": "Delivered", "delivered_date": "2026-01-31",
+          "budget_gbp": 100_000, "current_spend_gbp": 40_000}],
+        [{"campaign_number": "1", "fee_gbp": 30_000}],
+    )
+    assert finance.by_deal[1].influencer_cost_gbp == 30_000
+
+
+def test_margin_includes_freelance_cost():
+    finance = build_finance(
+        [{"pd_deal_id": 1, "client_name": "X", "stage": "Delivered", "delivered_date": "2026-01-31",
+          "budget_gbp": 100_000, "freelance_cost_gbp": 5_000}],
+        [{"campaign_number": "1", "fee_gbp": 45_000}],
+    )
+    assert finance.roll_up({1}).margin == pytest.approx(0.5)
 
 
 def test_email_stars_a_forecast_margin_and_explains_it():
@@ -719,7 +764,7 @@ def test_an_alias_attaches_a_campaign_to_the_named_brand():
     payload = fixture.load()
     brand_name = build_report(**payload).brands[0].name
     finance = build_finance(
-        [{"pd_deal_id": 777, "client_name": "Totally Different Ltd", "stage": "Delivered",
+        [{"pd_deal_id": 777, "client_name": "Totally Different Ltd", "stage": "Delivered", "delivered_date": "2026-01-31",
           "budget_gbp": 100_000, "current_spend_gbp": 40_000}],
         [],
     )

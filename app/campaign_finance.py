@@ -12,7 +12,7 @@ live in Supabase:
                          are creators listed on a client board who were never
                          paid, and carry no fee at all, so they are ignored.
 
-Cost is influencer fees + paid media + brand uplift. ``campaigns.final_cost_gbp``
+Cost is influencer fees + paid media + brand uplift + freelance. ``campaigns.final_cost_gbp``
 is deliberately untouched: 161 of its 250 values are zero and it understates
 the creator payments in 182 of the 201 rows where both exist.
 """
@@ -27,7 +27,9 @@ from .team_directory import SupabaseClient, TeamDirectoryError
 log = logging.getLogger(__name__)
 
 # Only a delivered campaign has a final cost; one still running has spent part
-# of its budget and would read as wildly profitable.
+# of its budget and would read as wildly profitable. The stage alone is not
+# proof: it is sometimes set while creators are still being paid, so a
+# campaign also needs a delivered date before its cost is treated as final.
 DELIVERED = "Delivered"
 # A campaign still being delivered has no final cost, but the campaign manager
 # has planned one. That forecast stands in until the work is finished.
@@ -41,21 +43,34 @@ class CampaignFinance:
     client_name: str
     stage: str
     revenue_gbp: float
-    influencer_cost_gbp: float | None
+    delivered_date: str | None = None
+    influencer_cost_gbp: float | None = None
     planned_cost_gbp: float | None = None
     paid_media_gbp: float = 0.0
     brand_uplift_gbp: float = 0.0
+    freelance_gbp: float = 0.0
     # True when the cost came from creator payment records rather than the
     # board's running spend total, which is the more reliable of the two.
     costed_from_payments: bool = False
 
     @property
-    def is_delivered(self) -> bool:
+    def is_marked_delivered(self) -> bool:
         return self.stage == DELIVERED
 
     @property
+    def is_delivered(self) -> bool:
+        """Delivered and dated, so its cost can be taken as final."""
+        return self.is_marked_delivered and bool(self.delivered_date)
+
+    @property
     def is_in_flight(self) -> bool:
-        return self.stage in IN_FLIGHT
+        # Marked delivered but undated is treated as still running: the
+        # planned cost is a safer guide than a half-paid creator bill.
+        return self.stage in IN_FLIGHT or (self.is_marked_delivered and not self.is_delivered)
+
+    @property
+    def _other_costs_gbp(self) -> float:
+        return self.paid_media_gbp + self.brand_uplift_gbp + self.freelance_gbp
 
     @property
     def has_forecast(self) -> bool:
@@ -63,7 +78,7 @@ class CampaignFinance:
 
     @property
     def forecast_cost_gbp(self) -> float:
-        return (self.planned_cost_gbp or 0.0) + self.paid_media_gbp + self.brand_uplift_gbp
+        return (self.planned_cost_gbp or 0.0) + self._other_costs_gbp
 
     @property
     def has_cost(self) -> bool:
@@ -71,7 +86,7 @@ class CampaignFinance:
 
     @property
     def total_cost_gbp(self) -> float:
-        return (self.influencer_cost_gbp or 0.0) + self.paid_media_gbp + self.brand_uplift_gbp
+        return (self.influencer_cost_gbp or 0.0) + self._other_costs_gbp
 
 
 @dataclass
@@ -148,15 +163,17 @@ def _paged(client: SupabaseClient, table: str, select: str) -> list[dict]:
 
 
 def build_finance(campaign_rows: list[dict], booking_rows: list[dict]) -> CampaignFinanceSet:
-    # Creator fees, summed per Pipedrive deal. A booking with no fee was never
-    # paid, so it adds nothing but must not turn a missing cost into zero.
+    # Creator fees, summed per Pipedrive deal. A booking with no fee adds
+    # nothing but must not turn a missing cost into zero.
     fees: dict[int, float] = {}
+    missing_fee: set[int] = set()
     for row in booking_rows:
         number = str(row.get("campaign_number") or "").strip()
         if not number.isdigit():
             continue  # 'board:...' and 'pay:...' rows carry no fee
         fee = _as_float(row.get("fee_gbp"))
         if fee is None:
+            missing_fee.add(int(number))
             continue
         fees[int(number)] = fees.get(int(number), 0.0) + fee
 
@@ -168,19 +185,28 @@ def build_finance(campaign_rows: list[dict], booking_rows: list[dict]) -> Campai
         deal_id = int(deal_id)
         from_payments = deal_id in fees
         cost = fees.get(deal_id)
+        board_spend = _as_float(row.get("current_spend_gbp"))
         if cost is None:
             # Fall back to the board's running spend, which tracks the creator
             # payments closely but is not itself a payment record.
-            cost = _as_float(row.get("current_spend_gbp"))
+            cost = board_spend
+        elif deal_id in missing_fee and board_spend is not None and board_spend > cost:
+            # Some creators have no fee recorded, so the payments understate
+            # the cost; the board has seen more of it (Runway SOW1: £36k paid
+            # against £89k on the board, which read as an 84% margin).
+            cost = board_spend
+            from_payments = False
         by_deal[deal_id] = CampaignFinance(
             pd_deal_id=deal_id,
             client_name=(row.get("client_name") or "").strip(),
             stage=(row.get("stage") or "").strip(),
             revenue_gbp=_as_float(row.get("budget_gbp")) or 0.0,
+            delivered_date=row.get("delivered_date") or None,
             influencer_cost_gbp=cost,
             planned_cost_gbp=_as_float(row.get("planned_spend")),
             paid_media_gbp=_as_float(row.get("paid_media_spend")) or 0.0,
             brand_uplift_gbp=_as_float(row.get("brand_uplift_spend")) or 0.0,
+            freelance_gbp=_as_float(row.get("freelance_cost_gbp")) or 0.0,
             costed_from_payments=from_payments,
         )
     return CampaignFinanceSet(by_deal=by_deal, loaded=True)
@@ -195,8 +221,8 @@ def load_campaign_finance(url: str, api_key: str) -> CampaignFinanceSet:
         with SupabaseClient(url, api_key) as client:
             campaigns = _paged(
                 client, "campaigns",
-                "pd_deal_id,client_name,stage,budget_gbp,current_spend_gbp,planned_spend,"
-                "paid_media_spend,brand_uplift_spend",
+                "pd_deal_id,client_name,stage,delivered_date,budget_gbp,current_spend_gbp,"
+                "planned_spend,paid_media_spend,brand_uplift_spend,freelance_cost_gbp",
             )
             bookings = _paged(client, "creator_bookings", "campaign_number,fee_gbp")
         return build_finance(campaigns, bookings)

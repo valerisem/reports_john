@@ -423,7 +423,7 @@ def _progress_section(data: ReportData, new_column: dict,
     if any(_finance_label(f) for f in finances):
         note = "Margin is average gross margin on delivered campaigns."
         if any(f and f.margin is not None and f.is_forecast for f in finances):
-            note += " * means nothing delivered yet, so it is the forecast margin."
+            note += " * means no campaign is confirmed delivered yet, so it is the forecast margin."
     big = {
         "title": "Biggest Clients",
         "summary": summary,
